@@ -5,7 +5,7 @@
 use core::borrow::Borrow;
 
 /// Trait for providers of append-only random-access log functionality.
-pub trait Aora<K: Into<[u8; 32]> + From<[u8; 32]>, V> {
+pub trait Aora<K: Into<[u8; LEN]> + From<[u8; LEN]>, V, const LEN: usize = 32> {
     /// Adds item to the append-only log. If the item is already in the log, does noting.
     ///
     /// # Panic
@@ -38,14 +38,14 @@ pub mod file {
 
     use super::*;
 
-    pub struct FileAora<Id: Ord + From<[u8; 32]>, T> {
+    pub struct FileAora<Id: Ord + From<[u8; LEN]>, T, const LEN: usize = 32> {
         log: File,
         idx: File,
         index: BTreeMap<Id, u64>,
         _phantom: PhantomData<T>,
     }
 
-    impl<Id: Ord + From<[u8; 32]>, T> FileAora<Id, T> {
+    impl<Id: Ord + From<[u8; LEN]>, T, const LEN: usize> FileAora<Id, T, LEN> {
         fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
             let path = path.as_ref();
             let log = path.join(format!("{name}.log"));
@@ -83,7 +83,7 @@ pub mod file {
 
             let mut index = BTreeMap::new();
             loop {
-                let mut id = [0u8; 32];
+                let mut id = [0u8; LEN];
                 let res = idx.read_exact(&mut id);
                 if matches!(res, Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof) {
                     break;
@@ -108,8 +108,11 @@ pub mod file {
         }
     }
 
-    impl<Id: Ord + From<[u8; 32]> + Into<[u8; 32]>, T: Eq + StrictEncode + StrictDecode> Aora<Id, T>
-        for FileAora<Id, T>
+    impl<
+        Id: Ord + From<[u8; LEN]> + Into<[u8; LEN]>,
+        T: Eq + StrictEncode + StrictDecode,
+        const LEN: usize,
+    > Aora<Id, T, LEN> for FileAora<Id, T, LEN>
     {
         fn append(&mut self, id: Id, item: &T) {
             if self.has(&id) {
@@ -167,17 +170,17 @@ pub mod file {
         }
     }
 
-    pub struct Iter<'file, Id: From<[u8; 32]>, T: StrictDecode> {
+    pub struct Iter<'file, Id: From<[u8; LEN]>, T: StrictDecode, const LEN: usize> {
         log: StrictReader<StreamReader<&'file File>>,
         idx: &'file File,
         _phantom: PhantomData<(Id, T)>,
     }
 
-    impl<Id: From<[u8; 32]>, T: StrictDecode> Iterator for Iter<'_, Id, T> {
+    impl<Id: From<[u8; LEN]>, T: StrictDecode, const LEN: usize> Iterator for Iter<'_, Id, T, LEN> {
         type Item = (Id, T);
 
         fn next(&mut self) -> Option<Self::Item> {
-            let mut id = [0u8; 32];
+            let mut id = [0u8; LEN];
             self.idx.read_exact(&mut id).ok()?;
             self.idx
                 .seek(SeekFrom::Current(8))
