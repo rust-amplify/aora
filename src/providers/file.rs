@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -84,15 +85,17 @@ impl<Id: Ord + From<[u8; LEN]>, T, const LEN: usize> FileAora<Id, T, LEN> {
 }
 
 impl<
-    Id: Ord + From<[u8; LEN]> + Into<[u8; LEN]>,
-    T: Eq + StrictEncode + StrictDecode,
+    K: Ord + From<[u8; LEN]> + Into<[u8; LEN]>,
+    V: Eq + StrictEncode + StrictDecode,
     const LEN: usize,
-> Aora<Id, T, LEN> for FileAora<Id, T, LEN>
+> Aora<K, V, LEN> for FileAora<K, V, LEN>
 {
-    fn append(&mut self, id: Id, item: &T) {
-        if self.has(&id) {
-            let old = self.read(&id);
-            if &old != item {
+    fn append(&mut self, key: K, value: impl Borrow<V>) {
+        let value = value.borrow();
+        
+        if self.has(&key) {
+            let old = self.read(&key);
+            if &old != value {
                 panic!(
                     "item under the given id is different from another item under the same id \
                          already present in the log"
@@ -100,7 +103,7 @@ impl<
             }
             return;
         }
-        let id = id.into();
+        let id = key.into();
         self.log
             .seek(SeekFrom::End(0))
             .expect("unable to seek to the end of the log");
@@ -109,7 +112,7 @@ impl<
             .stream_position()
             .expect("unable to get log position");
         let writer = StrictWriter::with(StreamWriter::new::<{ usize::MAX }>(&mut self.log));
-        item.strict_encode(writer).unwrap();
+        value.strict_encode(writer).unwrap();
         self.idx
             .seek(SeekFrom::End(0))
             .expect("unable to seek to the end of the index");
@@ -120,19 +123,19 @@ impl<
         self.index.insert(id.into(), pos);
     }
 
-    fn has(&self, id: &Id) -> bool { self.index.contains_key(id) }
+    fn has(&self, id: &K) -> bool { self.index.contains_key(id) }
 
-    fn read(&mut self, id: &Id) -> T {
+    fn read(&mut self, id: &K) -> V {
         let pos = self.index.get(&id).expect("unknown item");
 
         self.log
             .seek(SeekFrom::Start(*pos))
             .expect("unable to seek to the item");
         let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&self.log));
-        T::strict_decode(&mut reader).expect("unable to read item")
+        V::strict_decode(&mut reader).expect("unable to read item")
     }
 
-    fn iter(&mut self) -> impl Iterator<Item = (Id, T)> {
+    fn iter(&mut self) -> impl Iterator<Item = (K, V)> {
         self.log
             .seek(SeekFrom::Start(0))
             .expect("unable to seek to the start of the log file");

@@ -16,13 +16,13 @@ pub trait Aora<K: Into<[u8; LEN]> + From<[u8; LEN]>, V, const LEN: usize = 32> {
     ///
     /// Panics if item under the given id is different from another item under the same id already
     /// present in the log
-    fn append(&mut self, id: K, item: &V);
+    fn append(&mut self, key: K, item: impl Borrow<V>);
     fn extend(&mut self, iter: impl IntoIterator<Item = (K, impl Borrow<V>)>) {
-        for (id, item) in iter {
-            self.append(id, item.borrow());
+        for (key, item) in iter {
+            self.append(key, item.borrow());
         }
     }
-    fn has(&self, id: &K) -> bool;
-    fn read(&mut self, id: &K) -> V;
+    fn has(&self, key: &K) -> bool;
+    fn read(&mut self, key: &K) -> V;
     fn iter(&mut self) -> impl Iterator<Item = (K, V)>;
 }
