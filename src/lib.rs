@@ -5,25 +5,22 @@
 use core::borrow::Borrow;
 
 /// Trait for providers of append-only random-access log functionality.
-pub trait Aora {
-    type Item: Sized;
-    type Id: Into<[u8; 32]> + From<[u8; 32]>;
-
+pub trait Aora<K: Into<[u8; 32]> + From<[u8; 32]>, V> {
     /// Adds item to the append-only log. If the item is already in the log, does noting.
     ///
     /// # Panic
     ///
     /// Panics if item under the given id is different from another item under the same id already
     /// present in the log
-    fn append(&mut self, id: Self::Id, item: &Self::Item);
-    fn extend(&mut self, iter: impl IntoIterator<Item = (Self::Id, impl Borrow<Self::Item>)>) {
+    fn append(&mut self, id: K, item: &V);
+    fn extend(&mut self, iter: impl IntoIterator<Item = (K, impl Borrow<V>)>) {
         for (id, item) in iter {
             self.append(id, item.borrow());
         }
     }
-    fn has(&self, id: &Self::Id) -> bool;
-    fn read(&mut self, id: Self::Id) -> Self::Item;
-    fn iter(&mut self) -> impl Iterator<Item = (Self::Id, Self::Item)>;
+    fn has(&self, id: &K) -> bool;
+    fn read(&mut self, id: &K) -> V;
+    fn iter(&mut self) -> impl Iterator<Item = (K, V)>;
 }
 
 #[cfg(feature = "file-strict")]
@@ -111,15 +108,12 @@ pub mod file {
         }
     }
 
-    impl<Id: Ord + From<[u8; 32]> + Into<[u8; 32]>, T: Eq + StrictEncode + StrictDecode> Aora
+    impl<Id: Ord + From<[u8; 32]> + Into<[u8; 32]>, T: Eq + StrictEncode + StrictDecode> Aora<Id, T>
         for FileAora<Id, T>
     {
-        type Item = T;
-        type Id = Id;
-
-        fn append(&mut self, id: Self::Id, item: &T) {
+        fn append(&mut self, id: Id, item: &T) {
             if self.has(&id) {
-                let old = self.read(id);
+                let old = self.read(&id);
                 if &old != item {
                     panic!(
                         "item under the given id is different from another item under the same id \
@@ -148,9 +142,9 @@ pub mod file {
             self.index.insert(id.into(), pos);
         }
 
-        fn has(&self, id: &Self::Id) -> bool { self.index.contains_key(id) }
+        fn has(&self, id: &Id) -> bool { self.index.contains_key(id) }
 
-        fn read(&mut self, id: Self::Id) -> T {
+        fn read(&mut self, id: &Id) -> T {
             let pos = self.index.get(&id).expect("unknown item");
 
             self.log
@@ -160,7 +154,7 @@ pub mod file {
             T::strict_decode(&mut reader).expect("unable to read item")
         }
 
-        fn iter(&mut self) -> impl Iterator<Item = (Self::Id, T)> {
+        fn iter(&mut self) -> impl Iterator<Item = (Id, T)> {
             self.log
                 .seek(SeekFrom::Start(0))
                 .expect("unable to seek to the start of the log file");
