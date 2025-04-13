@@ -56,9 +56,12 @@ where
     fn iter(&self) -> impl Iterator<Item = (K, V)>;
 }
 
-/// Append-only key to vectorized values map.
-pub trait AoraVecMap<K, V, const KEY_LEN: usize = 32>
-where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+/// Append-only log mapping keys to value sets, which is useful for building one-to-many key
+/// indexes. The values in the index are kept in the order they were added.
+pub trait AoraIndex<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
+where
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
@@ -70,10 +73,10 @@ where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     fn value_len(&self, key: &K) -> usize;
 
     /// Retrieves value vector from the log. If the key is not present, returns an empty iterator.
-    fn get(&self, key: K) -> impl ExactSizeIterator<Item = V>;
+    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = V>;
 
     /// Pushes a new value into the value array for the given key.
-    fn push(&mut self, key: K, val: impl Borrow<V>);
+    fn push(&mut self, key: K, val: V);
 }
 
 /// Append-update key-value map.
