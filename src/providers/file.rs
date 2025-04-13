@@ -13,10 +13,10 @@ use strict_encoding::{
     StreamReader, StreamWriter, StrictDecode, StrictEncode, StrictReader, StrictWriter,
 };
 
-use crate::Aora;
+use crate::AppendOnlyMap;
 
-pub struct FileAora<K, V, const LEN: usize = 32>
-where K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>
+pub struct FileAora<K, V, const KEY_LEN: usize = 32>
+where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     log: RefCell<File>,
     idx: RefCell<File>,
@@ -24,8 +24,8 @@ where K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>
     _phantom: PhantomData<V>,
 }
 
-impl<K, V, const LEN: usize> FileAora<K, V, LEN>
-where K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>
+impl<K, V, const KEY_LEN: usize> FileAora<K, V, KEY_LEN>
+where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
         let path = path.as_ref();
@@ -69,7 +69,7 @@ where K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>
 
         let mut index = BTreeMap::new();
         loop {
-            let mut id = [0u8; LEN];
+            let mut id = [0u8; KEY_LEN];
             let res = idx.read_exact(&mut id);
             if matches!(res, Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof) {
                 break;
@@ -99,11 +99,27 @@ where K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>
     }
 }
 
-impl<K, V, const LEN: usize> Aora<K, V, LEN> for FileAora<K, V, LEN>
+impl<K, V, const KEY_LEN: usize> AppendOnlyMap<K, V, KEY_LEN> for FileAora<K, V, KEY_LEN>
 where
-    K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>,
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,
 {
+    fn contains_key(&self, key: &K) -> bool { self.index.borrow().contains_key(key) }
+
+    fn get(&self, key: &K) -> Option<V> {
+        let index = self.index.borrow();
+        let pos = index.get(&key)?;
+
+        let mut log = self.log.borrow_mut();
+        log.seek(SeekFrom::Start(*pos))
+            .expect("unable to seek to the item");
+        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&*log));
+        let value = V::strict_decode(&mut reader).expect("unable to read item");
+        Some(value)
+    }
+
+    fn get_expect(&self, key: &K) -> V { self.get(key).expect("unknown item") }
+
     fn insert(&mut self, key: K, value: impl Borrow<V>) {
         let value = value.borrow();
 
@@ -137,22 +153,6 @@ where
         self.index.get_mut().insert(id.into(), pos);
     }
 
-    fn contains_key(&self, key: &K) -> bool { self.index.borrow().contains_key(key) }
-
-    fn get(&self, key: &K) -> Option<V> {
-        let index = self.index.borrow();
-        let pos = index.get(&key)?;
-
-        let mut log = self.log.borrow_mut();
-        log.seek(SeekFrom::Start(*pos))
-            .expect("unable to seek to the item");
-        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&*log));
-        let value = V::strict_decode(&mut reader).expect("unable to read item");
-        Some(value)
-    }
-
-    fn get_expect(&self, key: &K) -> V { self.get(key).expect("unknown item") }
-
     fn iter(&self) -> impl Iterator<Item = (K, V)> {
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(0))
@@ -169,18 +169,20 @@ where
     }
 }
 
-pub struct Iter<'file, K: From<[u8; LEN]>, V: StrictDecode, const LEN: usize> {
+pub struct Iter<'file, K: From<[u8; KEY_LEN]>, V: StrictDecode, const KEY_LEN: usize> {
     log: RefMut<'file, File>,
     idx: RefMut<'file, File>,
     pos: u64,
     _phantom: PhantomData<(K, V)>,
 }
 
-impl<K: From<[u8; LEN]>, V: StrictDecode, const LEN: usize> Iterator for Iter<'_, K, V, LEN> {
+impl<K: From<[u8; KEY_LEN]>, V: StrictDecode, const KEY_LEN: usize> Iterator
+    for Iter<'_, K, V, KEY_LEN>
+{
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut id = [0u8; LEN];
+        let mut id = [0u8; KEY_LEN];
         self.idx.read_exact(&mut id).ok()?;
         self.idx
             .seek(SeekFrom::Current(8))
