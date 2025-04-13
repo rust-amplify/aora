@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Borrow;
 use std::cell::{RefCell, RefMut};
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
-use std::io;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -41,10 +39,10 @@ where
     pub fn new(path: impl AsRef<Path>, name: &str) -> Self {
         let (log, idx) = Self::prepare(path, name);
         let log = File::create_new(&log).unwrap_or_else(|_| {
-            panic!("unable to create append-only log file `{}`", log.display())
+            panic!("unable to create append-only log file '{}'", log.display())
         });
         let idx = File::create_new(&idx).unwrap_or_else(|_| {
-            panic!("unable to create random-access index file `{}`", idx.display())
+            panic!("unable to create random-access index file '{}'", idx.display())
         });
         Self {
             log: RefCell::new(log),
@@ -61,14 +59,14 @@ where
             .write(true)
             .open(&log)
             .unwrap_or_else(|_| {
-                panic!("unable to create append-only log file `{}`", log.display())
+                panic!("unable to create append-only log file '{}'", log.display())
             });
         let mut idx = OpenOptions::new()
             .read(true)
             .write(true)
             .open(&idx)
             .unwrap_or_else(|_| {
-                panic!("unable to create random-access index file `{}`", idx.display())
+                panic!("unable to create random-access index file '{}'", idx.display())
             });
 
         let mut index = BTreeMap::new();
@@ -122,14 +120,10 @@ where
         Some(value)
     }
 
-    fn get_expect(&self, key: &K) -> V { self.get(key).expect("unknown item") }
-
-    fn insert(&mut self, key: K, value: impl Borrow<V>) {
-        let value = value.borrow();
-
+    fn insert(&mut self, key: K, value: V) {
         if self.contains_key(&key) {
             let old = self.get(&key);
-            if old.as_ref() != Some(value) {
+            if old != Some(value) {
                 panic!(
                     "item under the given id is different from another item under the same id \
                      already present in the log"

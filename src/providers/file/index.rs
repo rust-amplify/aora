@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
-use std::io;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 use indexmap::IndexSet;
@@ -39,19 +39,19 @@ where
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];
         while file.read_exact(&mut key_buf).is_ok() {
-            let opid = K::from(key_buf);
-            let mut ids = IndexSet::new();
+            let key = K::from(key_buf);
+            let mut values = IndexSet::new();
             let mut len = [0u8; 4];
             file.read_exact(&mut len).expect("cannot read index file");
             let mut len = u32::from_le_bytes(len);
             while len > 0 {
                 file.read_exact(&mut val_buf)
                     .expect("cannot read index file");
-                let res = ids.insert(val_buf.into());
+                let res = values.insert(val_buf.into());
                 debug_assert!(res, "duplicate id in index file");
                 len -= 1;
             }
-            cache.insert(opid, ids);
+            cache.insert(key, values);
         }
         Ok(Self { path, cache })
     }
@@ -80,13 +80,13 @@ where
     K: Copy + Ord + From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: Copy + Eq + Hash + From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
-    fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied() }
+    fn keys(&self) -> impl Iterator<Item = impl Borrow<K>> { self.cache.keys() }
 
     fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(&key) }
 
     fn value_len(&self, key: &K) -> usize { self.cache.get(key).map(|ids| ids.len()).unwrap_or(0) }
 
-    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = V> {
+    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = impl Borrow<V>> {
         match self.cache.get(key) {
             Some(ids) => ids.clone().into_iter(),
             None => IndexSet::new().into_iter(),
