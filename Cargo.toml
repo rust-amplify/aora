@@ -17,4 +17,5 @@ strict_encoding = { version = "2.8.1", optional = true }
 
 [features]
 default = ["file-strict"]
-file-strict = ["strict_encoding"]
+std = []
+file-strict = ["std", "strict_encoding"]

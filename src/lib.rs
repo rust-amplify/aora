@@ -17,12 +17,29 @@ pub trait Aora<K: Into<[u8; LEN]> + From<[u8; LEN]>, V, const LEN: usize = 32> {
     /// Panics if item under the given id is different from another item under the same id already
     /// present in the log
     fn append(&mut self, key: K, item: impl Borrow<V>);
-    fn extend(&mut self, iter: impl IntoIterator<Item = (K, impl Borrow<V>)>) {
+
+    /// Appends items from an iterator.
+    ///
+    /// # Panic
+    ///
+    /// Panics if item under the given id is different from another item under the same id already
+    /// present in the log
+    fn append_all(&mut self, iter: impl IntoIterator<Item = (K, impl Borrow<V>)>) {
         for (key, item) in iter {
             self.append(key, item.borrow());
         }
     }
-    fn has(&self, key: &K) -> bool;
-    fn read(&mut self, key: &K) -> V;
-    fn iter(&mut self) -> impl Iterator<Item = (K, V)>;
+
+    /// Checks whether given value is present in the log.
+    fn contains(&self, key: &K) -> bool;
+
+    /// Retrieves value from the log.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the item under the provided key is not present.
+    fn read(&self, key: &K) -> V;
+
+    /// Returns an iterator over the key and value pairs.
+    fn iter(&self) -> impl Iterator<Item = (K, V)>;
 }
