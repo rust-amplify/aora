@@ -13,10 +13,12 @@ use strict_encoding::{
     StreamReader, StreamWriter, StrictDecode, StrictEncode, StrictReader, StrictWriter,
 };
 
-use crate::AppendOnlyMap;
+use crate::AoraMap;
 
-pub struct FileAora<K, V, const KEY_LEN: usize = 32>
-where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+pub struct FileAoraMap<K, V, const KEY_LEN: usize = 32>
+where
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Eq,
 {
     log: RefCell<File>,
     idx: RefCell<File>,
@@ -24,8 +26,10 @@ where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     _phantom: PhantomData<V>,
 }
 
-impl<K, V, const KEY_LEN: usize> FileAora<K, V, KEY_LEN>
-where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+impl<K, V, const KEY_LEN: usize> FileAoraMap<K, V, KEY_LEN>
+where
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Eq,
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
         let path = path.as_ref();
@@ -99,7 +103,7 @@ where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     }
 }
 
-impl<K, V, const KEY_LEN: usize> AppendOnlyMap<K, V, KEY_LEN> for FileAora<K, V, KEY_LEN>
+impl<K, V, const KEY_LEN: usize> AoraMap<K, V, KEY_LEN> for FileAoraMap<K, V, KEY_LEN>
 where
     K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,

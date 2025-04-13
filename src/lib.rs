@@ -9,8 +9,10 @@ use core::borrow::Borrow;
 pub use providers::*;
 
 /// Trait for providers of append-only key-value maps.
-pub trait AppendOnlyMap<K, V, const KEY_LEN: usize = 32>
-where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
+where
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Eq,
 {
     /// Checks whether given value is present in the log.
     fn contains_key(&self, key: &K) -> bool;
@@ -29,7 +31,8 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     /// Panics if the item under the provided key is not present.
     fn get_expect(&self, key: &K) -> V;
 
-    /// Inserts item to the append-only log. If the item is already in the log, does noting.
+    /// Inserts (appends) an item to the append-only log. If the item is already in the log, does
+    /// noting.
     ///
     /// # Panic
     ///
@@ -37,12 +40,12 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     /// present in the log.
     fn insert(&mut self, key: K, item: impl Borrow<V>);
 
-    /// Appends items from an iterator.
+    /// Inserts (appends) all items from an iterator to the append-only log.
     ///
     /// # Panic
     ///
-    /// Panics if item under the given id is different from another item under the same id already
-    /// present in the log.
+    /// Panics if any of the items is different from an item under the same id already present in
+    /// the log.
     fn extend(&mut self, iter: impl IntoIterator<Item = (K, impl Borrow<V>)>) {
         for (key, item) in iter {
             self.insert(key, item.borrow());
@@ -54,8 +57,8 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 }
 
 /// Append-only key to vectorized values map.
-pub trait AppendOnlyVecMap<K, V, const KEY_LEN: usize = 32>
-where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+pub trait AoraVecMap<K, V, const KEY_LEN: usize = 32>
+where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
@@ -76,10 +79,10 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 /// Append-update key-value map.
 ///
 /// Requires value to be encodable as a fixed-size array.
-pub trait AppendUpdateMap<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
+pub trait AuraMap<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
 where
-    K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
+    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Checks whether given value is present in the log.
     fn contains_key(&self, key: &K) -> bool;
