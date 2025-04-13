@@ -104,12 +104,12 @@ where
     K: Ord + Into<[u8; LEN]> + From<[u8; LEN]>,
     V: Eq + StrictEncode + StrictDecode,
 {
-    fn append(&mut self, key: K, value: impl Borrow<V>) {
+    fn insert(&mut self, key: K, value: impl Borrow<V>) {
         let value = value.borrow();
 
-        if self.contains(&key) {
-            let old = self.read(&key);
-            if &old != value {
+        if self.contains_key(&key) {
+            let old = self.get(&key);
+            if old.as_ref() != Some(value) {
                 panic!(
                     "item under the given id is different from another item under the same id \
                      already present in the log"
@@ -137,18 +137,21 @@ where
         self.index.get_mut().insert(id.into(), pos);
     }
 
-    fn contains(&self, key: &K) -> bool { self.index.borrow().contains_key(key) }
+    fn contains_key(&self, key: &K) -> bool { self.index.borrow().contains_key(key) }
 
-    fn read(&self, key: &K) -> V {
+    fn get(&self, key: &K) -> Option<V> {
         let index = self.index.borrow();
-        let pos = index.get(&key).expect("unknown item");
+        let pos = index.get(&key)?;
 
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(*pos))
             .expect("unable to seek to the item");
         let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&*log));
-        V::strict_decode(&mut reader).expect("unable to read item")
+        let value = V::strict_decode(&mut reader).expect("unable to read item");
+        Some(value)
     }
+
+    fn get_expect(&self, key: &K) -> V { self.get(key).expect("unknown item") }
 
     fn iter(&self) -> impl Iterator<Item = (K, V)> {
         let mut log = self.log.borrow_mut();
