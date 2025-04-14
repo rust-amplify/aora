@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::hash::Hash;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -33,8 +32,7 @@ where
         Ok(Self { cache: HashMap::new(), path, _phantom: PhantomData })
     }
 
-    pub fn open(path: PathBuf) -> io::Result<Self>
-    where V: Hash {
+    pub fn open(path: PathBuf) -> io::Result<Self> {
         let mut cache = HashMap::new();
         let mut file = File::open(&path)?;
         let mut key_buf = [0u8; KEY_LEN];
