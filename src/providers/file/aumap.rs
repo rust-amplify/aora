@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hash;
 use std::io::{self, Read, Write};
@@ -17,7 +17,7 @@ where
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     path: PathBuf,
-    cache: BTreeMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
+    cache: HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -28,12 +28,12 @@ where
 {
     pub fn create(path: PathBuf) -> io::Result<Self> {
         File::create_new(&path)?;
-        Ok(Self { cache: BTreeMap::new(), path, _phantom: PhantomData })
+        Ok(Self { cache: HashMap::new(), path, _phantom: PhantomData })
     }
 
     pub fn open(path: PathBuf) -> io::Result<Self>
     where V: Hash {
-        let mut cache = BTreeMap::new();
+        let mut cache = HashMap::new();
         let mut file = File::open(&path)?;
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];

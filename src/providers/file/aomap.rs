@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::{RefCell, RefMut};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
@@ -22,7 +22,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     log: RefCell<File>,
     idx: RefCell<File>,
-    index: RefCell<BTreeMap<[u8; KEY_LEN], u64>>,
+    index: RefCell<HashMap<[u8; KEY_LEN], u64>>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -47,7 +47,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
-            index: RefCell::new(BTreeMap::new()),
+            index: RefCell::new(HashMap::new()),
             _phantom: PhantomData,
         }
     }
@@ -69,7 +69,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
                 panic!("unable to create random-access index file '{}'", idx.display())
             });
 
-        let mut index = BTreeMap::new();
+        let mut index = HashMap::new();
         loop {
             let mut key_buf = [0u8; KEY_LEN];
             let res = idx.read_exact(&mut key_buf);
