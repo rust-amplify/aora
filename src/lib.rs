@@ -95,14 +95,14 @@ where
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get(&self, key: &K) -> Option<V>;
+    fn get(&self, key: K) -> Option<V>;
 
     /// Retrieves value from the log.
     ///
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get_expect(&self, key: &K) -> V { self.get(key).expect("key is absent") }
+    fn get_expect(&self, key: K) -> V { self.get(key).expect("key is absent") }
 
     /// Inserts item to the append-only log if the key is not yet present.
     ///
@@ -110,8 +110,9 @@ where
     ///
     /// Panics if item under the given id is different from another item under the same id already
     /// present in the log.
-    fn insert_only(&mut self, key: K, val: V) {
-        if let Some(v) = self.get(&key) {
+    fn insert_only(&mut self, key: K, val: V)
+    where K: Copy {
+        if let Some(v) = self.get(key) {
             if v.into() != val.into() {
                 panic!("key is already inserted");
             }

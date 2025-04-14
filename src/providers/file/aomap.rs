@@ -16,17 +16,18 @@ use crate::AoraMap;
 /// NB: This is blocking
 // TODO: Make unblocking with a separate thread reading and writing to the disk, communicated
 //       through a channel
+#[derive(Debug)]
 pub struct FileAoraMap<K, V, const KEY_LEN: usize = 32>
-where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     log: RefCell<File>,
     idx: RefCell<File>,
-    index: RefCell<BTreeMap<K, u64>>,
-    _phantom: PhantomData<V>,
+    index: RefCell<BTreeMap<[u8; KEY_LEN], u64>>,
+    _phantom: PhantomData<(K, V)>,
 }
 
 impl<K, V, const KEY_LEN: usize> FileAoraMap<K, V, KEY_LEN>
-where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
+where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
         let path = path.as_ref();
@@ -83,7 +84,7 @@ where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
                 .expect("unable to read index entry");
             let pos = u64::from_le_bytes(buf);
 
-            index.insert(key_buf.into(), pos);
+            index.insert(key_buf, pos);
         }
 
         log.seek(SeekFrom::End(0))
@@ -102,14 +103,14 @@ where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 
 impl<K, V, const KEY_LEN: usize> AoraMap<K, V, KEY_LEN> for FileAoraMap<K, V, KEY_LEN>
 where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,
 {
-    fn contains_key(&self, key: K) -> bool { self.index.borrow().contains_key(&key) }
+    fn contains_key(&self, key: K) -> bool { self.index.borrow().contains_key(&key.into()) }
 
     fn get(&self, key: K) -> Option<V> {
         let index = self.index.borrow();
-        let pos = index.get(&key)?;
+        let pos = index.get(&key.into())?;
 
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(*pos))
@@ -120,8 +121,9 @@ where
     }
 
     fn insert(&mut self, key: K, value: &V) {
+        let key = key.into();
         if self.index.borrow().contains_key(&key) {
-            let old = self.get(key);
+            let old = self.get(key.into());
             if old.as_ref() != Some(value) {
                 panic!(
                     "item under the given id is different from another item under the same id \
@@ -130,8 +132,6 @@ where
             }
             return;
         }
-        let id = key.into();
-
         let log = self.log.get_mut();
         let idx = self.idx.get_mut();
 
@@ -143,11 +143,11 @@ where
 
         idx.seek(SeekFrom::End(0))
             .expect("unable to seek to the end of the index");
-        idx.write_all(&id).expect("unable to write to index");
+        idx.write_all(&key).expect("unable to write to index");
         idx.write_all(&pos.to_le_bytes())
             .expect("unable to write to index");
 
-        self.index.get_mut().insert(id.into(), pos);
+        self.index.get_mut().insert(key, pos);
     }
 
     fn iter(&self) -> impl Iterator<Item = (K, V)> {
