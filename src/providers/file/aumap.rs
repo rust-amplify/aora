@@ -65,7 +65,7 @@ where
 {
     fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied() }
 
-    fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(&key) }
+    fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(key) }
 
     fn get(&self, key: &K) -> Option<V> { self.cache.get(key).copied() }
 

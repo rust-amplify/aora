@@ -113,7 +113,7 @@ where
 
     fn get(&self, key: &K) -> Option<V> {
         let index = self.index.borrow();
-        let pos = index.get(&key)?;
+        let pos = index.get(key)?;
 
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(*pos))

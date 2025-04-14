@@ -81,7 +81,7 @@ where
 {
     fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied() }
 
-    fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(&key) }
+    fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(key) }
 
     fn value_len(&self, key: &K) -> usize { self.cache.get(key).map(|ids| ids.len()).unwrap_or(0) }
 
