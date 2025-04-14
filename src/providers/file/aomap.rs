@@ -123,10 +123,10 @@ where
         Some(value)
     }
 
-    fn insert(&mut self, key: K, value: V) {
+    fn insert(&mut self, key: K, value: &V) {
         if self.contains_key(&key) {
             let old = self.get(&key);
-            if old != Some(value) {
+            if old.as_ref() != Some(value) {
                 panic!(
                     "item under the given id is different from another item under the same id \
                      already present in the log"

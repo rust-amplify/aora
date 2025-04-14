@@ -38,7 +38,7 @@ where
     ///
     /// Panics if item under the given id is different from another item under the same id already
     /// present in the log.
-    fn insert(&mut self, key: K, item: V);
+    fn insert(&mut self, key: K, item: &V);
 
     /// Inserts (appends) all items from an iterator to the append-only log.
     ///
@@ -46,7 +46,8 @@ where
     ///
     /// Panics if any of the items is different from an item under the same id already present in
     /// the log.
-    fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>) {
+    fn extend<'a>(&mut self, iter: impl IntoIterator<Item = (K, &'a V)>)
+    where V: 'a {
         for (key, item) in iter {
             self.insert(key, item);
         }
