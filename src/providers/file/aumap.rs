@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
@@ -64,11 +63,11 @@ where
     K: Copy + Ord + From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: Copy + Eq + Hash + From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
-    fn keys(&self) -> impl Iterator<Item = impl Borrow<K>> { self.cache.keys() }
+    fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied() }
 
     fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(&key) }
 
-    fn get(&self, key: &K) -> Option<impl Borrow<V>> { self.cache.get(key) }
+    fn get(&self, key: &K) -> Option<V> { self.cache.get(key).copied() }
 
     fn insert_or_update(&mut self, key: K, val: V) {
         *self.cache.entry(key).or_insert(val) = val;

@@ -13,6 +13,9 @@ use strict_encoding::{
 
 use crate::AoraMap;
 
+/// NB: This is blocking
+// TODO: Make unblocking with a separate thread reading and writing to the disk, communicated
+//       through a channel
 pub struct FileAoraMap<K, V, const KEY_LEN: usize = 32>
 where
     K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,

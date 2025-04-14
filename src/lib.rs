@@ -29,7 +29,7 @@ where
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get_expect(&self, key: &K) -> impl Borrow<V> { self.get(key).expect("key not found") }
+    fn get_expect(&self, key: &K) -> V { self.get(key).expect("key not found") }
 
     /// Inserts (appends) an item to the append-only log. If the item is already in the log, does
     /// noting.
@@ -64,7 +64,7 @@ where
     V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Returns iterator over all known keys.
-    fn keys(&self) -> impl Iterator<Item = impl Borrow<K>>;
+    fn keys(&self) -> impl Iterator<Item = K>;
 
     /// Checks whether given value is present in the log.
     fn contains_key(&self, key: &K) -> bool { self.value_len(key) > 0 }
@@ -73,7 +73,7 @@ where
     fn value_len(&self, key: &K) -> usize;
 
     /// Retrieves value vector from the log. If the key is not present, returns an empty iterator.
-    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = impl Borrow<V>>;
+    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = V>;
 
     /// Pushes a new value into the value array for the given key.
     fn push(&mut self, key: K, val: V);
@@ -88,7 +88,7 @@ where
     V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Returns iterator over all known keys.
-    fn keys(&self) -> impl Iterator<Item = impl Borrow<K>>;
+    fn keys(&self) -> impl Iterator<Item = K>;
 
     /// Checks whether given value is present in the log.
     fn contains_key(&self, key: &K) -> bool;
@@ -98,14 +98,14 @@ where
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get(&self, key: &K) -> Option<impl Borrow<V>>;
+    fn get(&self, key: &K) -> Option<V>;
 
     /// Retrieves value from the log.
     ///
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get_expect(&self, key: &K) -> impl Borrow<V> { self.get(key).expect("key is absent") }
+    fn get_expect(&self, key: &K) -> V { self.get(key).expect("key is absent") }
 
     /// Inserts item to the append-only log if the key is not yet present.
     ///
@@ -152,7 +152,7 @@ pub trait TransactionalMap<K> {
     /// Iterates over keys added to the log as a part of a specific transaction number.
     ///
     /// If the transaction number is not known returns an empty iterator.
-    fn transaction_keys(&self, txno: u64) -> impl ExactSizeIterator<Item = impl Borrow<K>>;
+    fn transaction_keys(&self, txno: u64) -> impl ExactSizeIterator<Item = K>;
 
     /// Returns number of transactions.
     fn transaction_count(&self) -> u64;
