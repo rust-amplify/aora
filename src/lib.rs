@@ -139,18 +139,27 @@ where
 }
 
 /// Transaction interface for append-only logs.
+///
+/// If an AORA log supports transactions, it should start a transaction on database open - and panic
+/// if there is a non-commited transaction on a drop.
 pub trait TransactionalMap<K> {
-    /// Starts new transaction.
-    fn begin_transaction(&mut self);
-
     /// Commits transaction, returning transaction number.
     ///
     /// Transaction numbers are always sequential.
+    ///
+    /// # Panics
+    ///
+    /// Panics if another transaction is already taking place.
     fn commit_transaction(&mut self) -> u64;
+
+    /// Aborts latest transaction.
+    fn abort_transaction(&mut self);
 
     /// Iterates over keys added to the log as a part of a specific transaction number.
     ///
-    /// If the transaction number is not known returns an empty iterator.
+    /// # Panics
+    ///
+    /// If the transaction number is not known.
     fn transaction_keys(&self, txno: u64) -> impl ExactSizeIterator<Item = K>;
 
     /// Returns number of transactions.
