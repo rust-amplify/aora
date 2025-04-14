@@ -4,32 +4,28 @@
 
 mod providers;
 
-use core::borrow::Borrow;
-
 pub use providers::*;
 
 /// Trait for providers of append-only key-value maps.
 pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
-where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Eq,
+where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     /// Checks whether given value is present in the log.
-    fn contains_key(&self, key: &K) -> bool;
+    fn contains_key(&self, key: K) -> bool;
 
     /// Retrieves value from the log.
     ///
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get(&self, key: &K) -> Option<V>;
+    fn get(&self, key: K) -> Option<V>;
 
     /// Retrieves value from the log.
     ///
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get_expect(&self, key: &K) -> V { self.get(key).expect("key not found") }
+    fn get_expect(&self, key: K) -> V { self.get(key).expect("key not found") }
 
     /// Inserts (appends) an item to the append-only log. If the item is already in the log, does
     /// noting.
@@ -61,20 +57,20 @@ where
 /// indexes. The values in the index are kept in the order they were added.
 pub trait AoraIndex<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
 where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
+    K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
     /// Checks whether given value is present in the log.
-    fn contains_key(&self, key: &K) -> bool { self.value_len(key) > 0 }
+    fn contains_key(&self, key: K) -> bool { self.value_len(key) > 0 }
 
     /// Measures length of the value vector for the given key.
-    fn value_len(&self, key: &K) -> usize;
+    fn value_len(&self, key: K) -> usize;
 
     /// Retrieves value vector from the log. If the key is not present, returns an empty iterator.
-    fn get(&self, key: &K) -> impl ExactSizeIterator<Item = V>;
+    fn get(&self, key: K) -> impl ExactSizeIterator<Item = V>;
 
     /// Pushes a new value into the value array for the given key.
     fn push(&mut self, key: K, val: V);
@@ -85,14 +81,14 @@ where
 /// Requires value to be encodable as a fixed-size array.
 pub trait AuraMap<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
 where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Eq + Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
+    K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
+    V: Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
     /// Checks whether given value is present in the log.
-    fn contains_key(&self, key: &K) -> bool;
+    fn contains_key(&self, key: K) -> bool;
 
     /// Retrieves value from the log.
     ///
@@ -116,7 +112,7 @@ where
     /// present in the log.
     fn insert_only(&mut self, key: K, val: V) {
         if let Some(v) = self.get(&key) {
-            if v.borrow() != &val {
+            if v.into() != val.into() {
                 panic!("key is already inserted");
             }
             return;
@@ -132,8 +128,9 @@ where
     /// # Panics
     ///
     /// If the key is not present in the log.
-    fn update_only(&mut self, key: K, val: V) {
-        if !self.contains_key(&key) {
+    fn update_only(&mut self, key: K, val: V)
+    where K: Copy {
+        if !self.contains_key(key) {
             panic!("the key is not known");
         }
         self.insert_or_update(key, val);

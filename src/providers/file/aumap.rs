@@ -13,7 +13,7 @@ use crate::AuraMap;
 pub struct FileAuraMap<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
 where
     K: Ord + From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
-    V: Eq + From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
+    V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     path: PathBuf,
     cache: BTreeMap<K, V>,
@@ -22,7 +22,7 @@ where
 impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> FileAuraMap<K, V, KEY_LEN, VAL_LEN>
 where
     K: Ord + From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
-    V: Eq + From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
+    V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     pub fn create(path: PathBuf) -> io::Result<Self> {
         File::create_new(&path)?;
@@ -65,9 +65,9 @@ where
 {
     fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied() }
 
-    fn contains_key(&self, key: &K) -> bool { self.cache.contains_key(key) }
+    fn contains_key(&self, key: K) -> bool { self.cache.contains_key(&key) }
 
-    fn get(&self, key: &K) -> Option<V> { self.cache.get(key).copied() }
+    fn get(&self, key: &K) -> Option<V> { self.cache.get(&key).copied() }
 
     fn insert_or_update(&mut self, key: K, val: V) {
         *self.cache.entry(key).or_insert(val) = val;

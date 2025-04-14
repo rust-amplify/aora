@@ -17,9 +17,7 @@ use crate::AoraMap;
 // TODO: Make unblocking with a separate thread reading and writing to the disk, communicated
 //       through a channel
 pub struct FileAoraMap<K, V, const KEY_LEN: usize = 32>
-where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Eq,
+where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     log: RefCell<File>,
     idx: RefCell<File>,
@@ -28,9 +26,7 @@ where
 }
 
 impl<K, V, const KEY_LEN: usize> FileAoraMap<K, V, KEY_LEN>
-where
-    K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
-    V: Eq,
+where K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
         let path = path.as_ref();
@@ -74,8 +70,8 @@ where
 
         let mut index = BTreeMap::new();
         loop {
-            let mut id = [0u8; KEY_LEN];
-            let res = idx.read_exact(&mut id);
+            let mut key_buf = [0u8; KEY_LEN];
+            let res = idx.read_exact(&mut key_buf);
             if matches!(res, Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof) {
                 break;
             } else {
@@ -87,7 +83,7 @@ where
                 .expect("unable to read index entry");
             let pos = u64::from_le_bytes(buf);
 
-            index.insert(id.into(), pos);
+            index.insert(key_buf.into(), pos);
         }
 
         log.seek(SeekFrom::End(0))
@@ -109,11 +105,11 @@ where
     K: Ord + Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,
 {
-    fn contains_key(&self, key: &K) -> bool { self.index.borrow().contains_key(key) }
+    fn contains_key(&self, key: K) -> bool { self.index.borrow().contains_key(&key) }
 
-    fn get(&self, key: &K) -> Option<V> {
+    fn get(&self, key: K) -> Option<V> {
         let index = self.index.borrow();
-        let pos = index.get(key)?;
+        let pos = index.get(&key)?;
 
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(*pos))
@@ -124,8 +120,8 @@ where
     }
 
     fn insert(&mut self, key: K, value: &V) {
-        if self.contains_key(&key) {
-            let old = self.get(&key);
+        if self.index.borrow().contains_key(&key) {
+            let old = self.get(key);
             if old.as_ref() != Some(value) {
                 panic!(
                     "item under the given id is different from another item under the same id \
