@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
+use binfile::BinFile;
 use indexmap::IndexSet;
 
 use crate::AoraIndex;
 
 // For now, this is just an in-memory read BTree. In the next releases we need to change this.
 #[derive(Debug)]
-pub struct FileAoraIndex<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
-where
+pub struct FileAoraIndex<
+    K,
+    V,
+    const MAGIC: u64,
+    const VER: u16 = 1,
+    const KEY_LEN: usize = 32,
+    const VAL_LEN: usize = 32,
+> where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
@@ -22,19 +28,20 @@ where
     _phantom: PhantomData<(K, V)>,
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> FileAoraIndex<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
+    FileAoraIndex<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     pub fn create(path: PathBuf) -> io::Result<Self> {
-        File::create_new(&path)?;
+        BinFile::<MAGIC, VER>::create_new(&path)?;
         Ok(Self { cache: HashMap::new(), path, _phantom: PhantomData })
     }
 
     pub fn open(path: PathBuf) -> io::Result<Self> {
         let mut cache = HashMap::new();
-        let mut file = File::open(&path)?;
+        let mut file = BinFile::<MAGIC, VER>::open(&path)?;
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];
         while file.read_exact(&mut key_buf).is_ok() {
@@ -55,7 +62,7 @@ where
     }
 
     pub fn save(&self) -> io::Result<()> {
-        let mut index_file = File::create(&self.path)?;
+        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)?;
         for (key, values) in &self.cache {
             index_file.write_all(key)?;
             let len = values.len() as u32;
@@ -68,8 +75,8 @@ where
     }
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> AoraIndex<K, V, KEY_LEN, VAL_LEN>
-    for FileAoraIndex<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
+    AoraIndex<K, V, KEY_LEN, VAL_LEN> for FileAoraIndex<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,

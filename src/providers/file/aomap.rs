@@ -2,11 +2,11 @@
 
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
+use binfile::BinFile;
 use strict_encoding::{
     StreamReader, StreamWriter, StrictDecode, StrictEncode, StrictReader, StrictWriter,
 };
@@ -17,16 +17,17 @@ use crate::AoraMap;
 // TODO: Make unblocking with a separate thread reading and writing to the disk, communicated
 //       through a channel
 #[derive(Debug)]
-pub struct FileAoraMap<K, V, const KEY_LEN: usize = 32>
+pub struct FileAoraMap<K, V, const MAGIC: u64, const VER: u16 = 1, const KEY_LEN: usize = 32>
 where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
-    log: RefCell<File>,
-    idx: RefCell<File>,
+    log: RefCell<BinFile<MAGIC, VER>>,
+    idx: RefCell<BinFile<MAGIC, VER>>,
     index: RefCell<HashMap<[u8; KEY_LEN], u64>>,
     _phantom: PhantomData<(K, V)>,
 }
 
-impl<K, V, const KEY_LEN: usize> FileAoraMap<K, V, KEY_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize>
+    FileAoraMap<K, V, MAGIC, VER, KEY_LEN>
 where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
@@ -38,10 +39,10 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 
     pub fn new(path: impl AsRef<Path>, name: &str) -> Self {
         let (log, idx) = Self::prepare(path, name);
-        let log = File::create_new(&log).unwrap_or_else(|_| {
+        let log = BinFile::create_new(&log).unwrap_or_else(|_| {
             panic!("unable to create append-only log file '{}'", log.display())
         });
-        let idx = File::create_new(&idx).unwrap_or_else(|_| {
+        let idx = BinFile::create_new(&idx).unwrap_or_else(|_| {
             panic!("unable to create random-access index file '{}'", idx.display())
         });
         Self {
@@ -54,20 +55,12 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 
     pub fn open(path: impl AsRef<Path>, name: &str) -> Self {
         let (log, idx) = Self::prepare(path, name);
-        let mut log = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&log)
-            .unwrap_or_else(|_| {
-                panic!("unable to create append-only log file '{}'", log.display())
-            });
-        let mut idx = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&idx)
-            .unwrap_or_else(|_| {
-                panic!("unable to create random-access index file '{}'", idx.display())
-            });
+        let mut log = BinFile::open_rw(&log).unwrap_or_else(|_| {
+            panic!("unable to create append-only log file '{}'", log.display())
+        });
+        let mut idx = BinFile::open_rw(&idx).unwrap_or_else(|_| {
+            panic!("unable to create random-access index file '{}'", idx.display())
+        });
 
         let mut index = HashMap::new();
         loop {
@@ -101,7 +94,8 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     }
 }
 
-impl<K, V, const KEY_LEN: usize> AoraMap<K, V, KEY_LEN> for FileAoraMap<K, V, KEY_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize> AoraMap<K, V, KEY_LEN>
+    for FileAoraMap<K, V, MAGIC, VER, KEY_LEN>
 where
     K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,
@@ -115,7 +109,7 @@ where
         let mut log = self.log.borrow_mut();
         log.seek(SeekFrom::Start(*pos))
             .expect("unable to seek to the item");
-        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&*log));
+        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&mut *log));
         let value = V::strict_decode(&mut reader).expect("unable to read item");
         Some(value)
     }
@@ -166,15 +160,27 @@ where
     }
 }
 
-pub struct Iter<'file, K: From<[u8; KEY_LEN]>, V: StrictDecode, const KEY_LEN: usize> {
-    log: RefMut<'file, File>,
-    idx: RefMut<'file, File>,
+pub struct Iter<
+    'file,
+    K: From<[u8; KEY_LEN]>,
+    V: StrictDecode,
+    const MAGIC: u64,
+    const VER: u16,
+    const KEY_LEN: usize,
+> {
+    log: RefMut<'file, BinFile<MAGIC, VER>>,
+    idx: RefMut<'file, BinFile<MAGIC, VER>>,
     pos: u64,
     _phantom: PhantomData<(K, V)>,
 }
 
-impl<K: From<[u8; KEY_LEN]>, V: StrictDecode, const KEY_LEN: usize> Iterator
-    for Iter<'_, K, V, KEY_LEN>
+impl<
+    K: From<[u8; KEY_LEN]>,
+    V: StrictDecode,
+    const MAGIC: u64,
+    const VER: u16,
+    const KEY_LEN: usize,
+> Iterator for Iter<'_, K, V, MAGIC, VER, KEY_LEN>
 {
     type Item = (K, V);
 
@@ -189,7 +195,7 @@ impl<K: From<[u8; KEY_LEN]>, V: StrictDecode, const KEY_LEN: usize> Iterator
             .seek(SeekFrom::Start(self.pos))
             .expect("unable to seek to the iterator position");
 
-        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&*self.log));
+        let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&mut *self.log));
         let item = V::strict_decode(&mut reader).ok()?;
 
         self.pos = self

@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 use std::mem;
 use std::path::PathBuf;
 
+use binfile::BinFile;
+
 use crate::{AuraMap, TransactionalMap};
 
 // For now, this is just an in-memory read BTree. In the next releases we need to change this.
 #[derive(Debug)]
-pub struct FileAuraMap<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
-where
+pub struct FileAuraMap<
+    K,
+    V,
+    const MAGIC: u64,
+    const VER: u16 = 1,
+    const KEY_LEN: usize = 32,
+    const VAL_LEN: usize = 32,
+> where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
@@ -22,13 +29,14 @@ where
     _phantom: PhantomData<(K, V)>,
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> FileAuraMap<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
+    FileAuraMap<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     pub fn create(path: PathBuf) -> io::Result<Self> {
-        File::create_new(&path)?;
+        BinFile::<MAGIC, VER>::create_new(&path)?;
         Ok(Self {
             cache: Vec::new(),
             pending: HashMap::new(),
@@ -38,7 +46,7 @@ where
     }
 
     pub fn open(path: PathBuf) -> io::Result<Self> {
-        let mut file = File::open(&path)?;
+        let mut file = BinFile::<MAGIC, VER>::open(&path)?;
 
         let mut buf = [0u8; 8];
         file.read_exact(&mut buf)?;
@@ -60,7 +68,7 @@ where
     }
 
     pub fn save(&self) -> io::Result<()> {
-        let mut index_file = File::create(&self.path)?;
+        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)?;
 
         let num_pages = self.cache.len() as u64;
         index_file.write_all(&num_pages.to_le_bytes())?;
@@ -80,8 +88,8 @@ where
     }
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> AuraMap<K, V, KEY_LEN, VAL_LEN>
-    for FileAuraMap<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
+    AuraMap<K, V, KEY_LEN, VAL_LEN> for FileAuraMap<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
@@ -108,8 +116,8 @@ where
     }
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> TransactionalMap<K>
-    for FileAuraMap<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
+    TransactionalMap<K> for FileAuraMap<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
@@ -131,7 +139,8 @@ where
     fn transaction_count(&self) -> u64 { self.cache.len() as u64 }
 }
 
-impl<K, V, const KEY_LEN: usize, const VAL_LEN: usize> Drop for FileAuraMap<K, V, KEY_LEN, VAL_LEN>
+impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize> Drop
+    for FileAuraMap<K, V, MAGIC, VER, KEY_LEN, VAL_LEN>
 where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
