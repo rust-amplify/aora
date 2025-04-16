@@ -1,6 +1,6 @@
 [package]
 name = "aora"
-version = "0.3.0"
+version = "0.4.0"
 description = "Append-only random-accessed data persistence"
 authors = ["Dr. Maxim Orlovsky <orlovsky@ubideco.org>"]
 keywords = ["database", "append-only-log"]
