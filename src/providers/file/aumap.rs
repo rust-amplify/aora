@@ -303,4 +303,44 @@ mod tests {
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
         assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
     }
+
+    #[test]
+    fn insert_same() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::create(dir.path(), "insert_same").unwrap();
+
+        db.insert_only(0.into(), 1.into());
+        db.insert_only(0.into(), 1.into());
+        assert_eq!(db.commit_transaction(), 0);
+
+        db.insert_only(0.into(), 1.into());
+        assert_eq!(db.commit_transaction(), 0);
+
+        assert_eq!(db.transaction_count(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "key is already inserted")]
+    fn unique_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::create(dir.path(), "unique_keys").unwrap();
+
+        db.insert_only(0.into(), 1.into());
+        assert_eq!(db.commit_transaction(), 0);
+
+        db.insert_only(0.into(), 2.into());
+        assert_eq!(db.commit_transaction(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "the latest transaction must be committed before dropping")]
+    fn drop_uncommitted() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut db = Db::create(dir.path(), "drop_uncommitted").unwrap();
+            normal_ops(&mut db);
+            drop(db);
+        }
+        // we panic at the end of the scope
+    }
 }
