@@ -20,7 +20,7 @@ fn print_db_size(db: Db) {
 fn get(bench: &mut Bencher) {
     const NAME: &str = "bench_get";
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Db::create(dir.path(), NAME).unwrap();
+    let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
     let key = U64Le(0u64);
     db.insert_only(key, U64Le(1u64));
@@ -35,7 +35,7 @@ fn get(bench: &mut Bencher) {
 fn insert_only(bench: &mut Bencher) {
     const NAME: &str = "bench_insert_only";
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Db::create(dir.path(), NAME).unwrap();
+    let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
     let mut key = U64Le(0u64);
     bench.iter(|| {
@@ -52,7 +52,7 @@ fn insert_only(bench: &mut Bencher) {
 fn insert_commit(bench: &mut Bencher) {
     const NAME: &str = "bench_insert_commit";
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Db::create(dir.path(), NAME).unwrap();
+    let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
     let mut key = U64Le(0u64);
     bench.iter(|| {
@@ -68,7 +68,7 @@ fn insert_commit(bench: &mut Bencher) {
 fn update_only(bench: &mut Bencher) {
     const NAME: &str = "bench_update_only";
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Db::create(dir.path(), NAME).unwrap();
+    let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
     let key = U64Le(0u64);
     let mut val = U64Le(0u64);
@@ -87,7 +87,7 @@ fn update_only(bench: &mut Bencher) {
 fn update_commit(bench: &mut Bencher) {
     const NAME: &str = "bench_update_commit";
     let dir = tempfile::tempdir().unwrap();
-    let mut db = Db::create(dir.path(), NAME).unwrap();
+    let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
     let key = U64Le(0u64);
     let mut val = U64Le(0u64);
