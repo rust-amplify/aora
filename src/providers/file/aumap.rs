@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::{fs, mem};
@@ -83,12 +83,22 @@ where
         let mut val_buf = [0u8; VAL_LEN];
         let mut cache = Vec::with_capacity(num_pages as usize);
         for _ in 0..num_pages {
-            let mut page = HashMap::new();
-            while file.read_exact(&mut key_buf).is_ok() {
-                file.read_exact(&mut val_buf).expect("cannot read log file");
+            file.read_exact(&mut buf)?;
+            let num_keys = u64::from_le_bytes(buf);
+            let mut page = HashMap::with_capacity(num_keys as usize);
+            for _ in 0..num_keys {
+                file.read_exact(&mut key_buf)?;
+                file.read_exact(&mut val_buf)?;
                 page.insert(key_buf, val_buf);
             }
             cache.push(page);
+        }
+
+        if file.stream_position()? != file.metadata()?.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("append-update log file '{}' is corrupted", path.display()),
+            ));
         }
 
         Ok(Self { path, cache, pending: HashMap::new(), _phantom: PhantomData })
@@ -102,6 +112,8 @@ where
         index_file.write_all(&num_pages.to_le_bytes())?;
 
         for page in &self.cache {
+            let num_keys = page.len() as u64;
+            index_file.write_all(&num_keys.to_le_bytes())?;
             for (key, value) in page {
                 index_file.write_all(key)?;
                 index_file.write_all(value)?;
@@ -272,15 +284,23 @@ mod tests {
         assert_eq!(db.transaction_count(), 1);
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
 
+        // Insert another item
+        db.insert_only(3.into(), 5.into());
+        assert_eq!(db.commit_transaction(), 1);
+        assert_eq!(db.transaction_count(), 2);
+        assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+        assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
+
         let db = Db::open(dir.path(), "happy_transactions").unwrap();
 
         // Check that commitment hasn't changed anything
         assert_eq!(db.get_expect(1.into()).0, 4);
         assert_eq!(db.get_expect(0.into()).0, 3);
-        assert_eq!(db.keys().collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+        assert_eq!(db.keys().collect::<HashSet<_>>(), set![0.into(), 1.into(), 3.into()]);
 
         // Check that transaction information is value
-        assert_eq!(db.transaction_count(), 1);
+        assert_eq!(db.transaction_count(), 2);
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+        assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
     }
 }
