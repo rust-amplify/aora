@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(db.transaction_count(), 1);
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
 
-        let mut db = Db::open(dir.path(), "happy_transactions").unwrap();
+        let db = Db::open(dir.path(), "happy_transactions").unwrap();
 
         // Check that commitment hasn't changed anything
         assert_eq!(db.get_expect(1.into()).0, 4);
