@@ -2,6 +2,9 @@
 
 //! AORA: Append-only random-accessed data persistence, made in `BTreeMap`-like fashion.
 
+#[macro_use]
+extern crate amplify;
+
 mod providers;
 
 pub use providers::*;

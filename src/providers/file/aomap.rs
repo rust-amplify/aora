@@ -2,6 +2,7 @@
 
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -12,6 +13,21 @@ use strict_encoding::{
 };
 
 use crate::AoraMap;
+
+#[derive(Clone, Debug, Display, Error)]
+#[display(doc_comments)]
+pub enum AoraMapError {
+    /// AORA log database '{name}' can't be created since it already exists at '{path}'.
+    Exists { name: String, path: String },
+
+    /// AORA log database '{name}' at '{path}' exists, but some files are missing. A manual fix is
+    /// required.
+    PartiallyExists { name: String, path: String },
+
+    /// AORA log database '{name}' does not exist at '{path}'. You need to initialize it first with
+    /// either `create_new` or `open_or_create` methods.
+    NotExists { name: String, path: String },
+}
 
 /// NB: This is blocking
 // TODO: Make unblocking with a separate thread reading and writing to the disk, communicated
@@ -37,10 +53,69 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         (log, idx)
     }
 
-    pub fn create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+    pub fn create_new(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = path.as_ref();
         let (log, idx) = Self::prepare(path, name);
-        let log = BinFile::create_new(&log)?;
-        let idx = BinFile::create_new(&idx)?;
+        let log_exists = fs::exists(&log)?;
+        let idx_exists = fs::exists(&idx)?;
+        if log_exists && idx_exists {
+            return Err(io::Error::other(AoraMapError::Exists {
+                name: name.to_string(),
+                path: path.display().to_string(),
+            }));
+        }
+        if log_exists || idx_exists {
+            return Err(io::Error::other(AoraMapError::PartiallyExists {
+                name: name.to_string(),
+                path: path.display().to_string(),
+            }));
+        }
+        let log = BinFile::create_new(&log)
+            .map_err(|err| io::Error::new(err.kind(), format!("log file '{}'", log.display())))?;
+        let idx = BinFile::create_new(&idx)
+            .map_err(|err| io::Error::new(err.kind(), format!("index file '{}'", idx.display())))?;
+        Ok(Self {
+            log: RefCell::new(log),
+            idx: RefCell::new(idx),
+            index: RefCell::new(HashMap::new()),
+            _phantom: PhantomData,
+        })
+    }
+
+    pub fn open_or_create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = path.as_ref();
+        let (log, idx) = Self::prepare(path, name);
+        let log_exists = fs::exists(&log)?;
+        let idx_exists = fs::exists(&idx)?;
+        if log_exists || idx_exists {
+            return Err(io::Error::other(AoraMapError::PartiallyExists {
+                name: name.to_string(),
+                path: path.display().to_string(),
+            }));
+        }
+
+        let (log, idx) = if log_exists && idx_exists {
+            let log = BinFile::create_new(&log).map_err(|err| {
+                io::Error::new(err.kind(), format!("log file '{}'", log.display()))
+            })?;
+
+            let idx = BinFile::create_new(&idx).map_err(|err| {
+                io::Error::new(err.kind(), format!("index file '{}'", idx.display()))
+            })?;
+
+            (log, idx)
+        } else {
+            let log = BinFile::open_rw(&log).map_err(|err| {
+                io::Error::new(err.kind(), format!("log file '{}'", log.display()))
+            })?;
+
+            let idx = BinFile::open_rw(&idx).map_err(|err| {
+                io::Error::new(err.kind(), format!("index file '{}'", idx.display()))
+            })?;
+
+            (log, idx)
+        };
+
         Ok(Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
@@ -50,9 +125,27 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     }
 
     pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = path.as_ref();
         let (log, idx) = Self::prepare(path, name);
-        let mut log = BinFile::open_rw(&log)?;
-        let mut idx = BinFile::open_rw(&idx)?;
+        let log_exists = fs::exists(&log)?;
+        let idx_exists = fs::exists(&idx)?;
+        if log_exists && idx_exists {
+            return Err(io::Error::other(AoraMapError::NotExists {
+                name: name.to_string(),
+                path: path.display().to_string(),
+            }));
+        }
+        if log_exists || idx_exists {
+            return Err(io::Error::other(AoraMapError::PartiallyExists {
+                name: name.to_string(),
+                path: path.display().to_string(),
+            }));
+        }
+
+        let mut log = BinFile::open_rw(&log)
+            .map_err(|err| io::Error::new(err.kind(), format!("log file '{}'", log.display())))?;
+        let mut idx = BinFile::open_rw(&idx)
+            .map_err(|err| io::Error::new(err.kind(), format!("index file '{}'", idx.display())))?;
 
         let mut index = HashMap::new();
         loop {

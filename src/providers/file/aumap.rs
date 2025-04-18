@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
-use std::mem;
 use std::path::{Path, PathBuf};
+use std::{fs, mem};
 
 use binfile::BinFile;
 
@@ -42,7 +42,14 @@ where
 
     pub fn create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
-        BinFile::<MAGIC, VER>::create_new(&path)?;
+        if fs::exists(&path)? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("append-update log file '{}' already exists", path.display()),
+            ));
+        }
+        BinFile::<MAGIC, VER>::create_new(&path)
+            .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", path.display())))?;
         Ok(Self {
             cache: Vec::new(),
             pending: HashMap::new(),
@@ -51,8 +58,20 @@ where
         })
     }
 
+    pub fn open_or_create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = Self::prepare(path, name);
+        if !fs::exists(&path)? { Self::create(path, name) } else { Self::open(path, name) }
+    }
+
     pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
+
+        if fs::exists(&path)? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("append-update log file '{}' does not exist", path.display()),
+            ));
+        }
         let mut file = BinFile::<MAGIC, VER>::open(&path)?;
 
         let mut buf = [0u8; 8];
@@ -75,7 +94,8 @@ where
     }
 
     pub fn save(&self) -> io::Result<()> {
-        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)?;
+        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)
+            .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", self.path.display())))?;
 
         let num_pages = self.cache.len() as u64;
         index_file.write_all(&num_pages.to_le_bytes())?;

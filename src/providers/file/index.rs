@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -41,13 +42,31 @@ where
 
     pub fn create(path: PathBuf, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
+        if fs::exists(&path)? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("index file '{}' already exists", path.display()),
+            ));
+        }
         BinFile::<MAGIC, VER>::create_new(&path)?;
         Ok(Self { cache: HashMap::new(), path, _phantom: PhantomData })
+    }
+
+    pub fn open_or_create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = Self::prepare(path, name);
+        if !fs::exists(&path)? { Self::create(path, name) } else { Self::open(path, name) }
     }
 
     pub fn open(path: PathBuf, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
         let mut cache = HashMap::new();
+
+        if fs::exists(&path)? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("index file '{}' does not exist", path.display()),
+            ));
+        }
         let mut file = BinFile::<MAGIC, VER>::open(&path)?;
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];
@@ -69,7 +88,9 @@ where
     }
 
     pub fn save(&self) -> io::Result<()> {
-        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)?;
+        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)
+            .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", self.path.display())))?;
+
         for (key, values) in &self.cache {
             index_file.write_all(key)?;
             let len = values.len() as u32;
