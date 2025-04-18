@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use binfile::BinFile;
 
@@ -35,7 +35,13 @@ where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
-    pub fn create(path: PathBuf) -> io::Result<Self> {
+    fn prepare(path: impl AsRef<Path>, name: &str) -> PathBuf {
+        let path = path.as_ref();
+        path.join(name).with_extension("log")
+    }
+
+    pub fn create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = Self::prepare(path, name);
         BinFile::<MAGIC, VER>::create_new(&path)?;
         Ok(Self {
             cache: Vec::new(),
@@ -45,7 +51,8 @@ where
         })
     }
 
-    pub fn open(path: PathBuf) -> io::Result<Self> {
+    pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = Self::prepare(path, name);
         let mut file = BinFile::<MAGIC, VER>::open(&path)?;
 
         let mut buf = [0u8; 8];

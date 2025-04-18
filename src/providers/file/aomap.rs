@@ -32,35 +32,27 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     fn prepare(path: impl AsRef<Path>, name: &str) -> (PathBuf, PathBuf) {
         let path = path.as_ref();
-        let log = path.join(format!("{name}.log"));
-        let idx = path.join(format!("{name}.idx"));
+        let log = path.join(name).with_extension("log");
+        let idx = path.join(name).with_extension("idx");
         (log, idx)
     }
 
-    pub fn new(path: impl AsRef<Path>, name: &str) -> Self {
+    pub fn create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let (log, idx) = Self::prepare(path, name);
-        let log = BinFile::create_new(&log).unwrap_or_else(|_| {
-            panic!("unable to create append-only log file '{}'", log.display())
-        });
-        let idx = BinFile::create_new(&idx).unwrap_or_else(|_| {
-            panic!("unable to create random-access index file '{}'", idx.display())
-        });
-        Self {
+        let log = BinFile::create_new(&log)?;
+        let idx = BinFile::create_new(&idx)?;
+        Ok(Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
             index: RefCell::new(HashMap::new()),
             _phantom: PhantomData,
-        }
+        })
     }
 
-    pub fn open(path: impl AsRef<Path>, name: &str) -> Self {
+    pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let (log, idx) = Self::prepare(path, name);
-        let mut log = BinFile::open_rw(&log).unwrap_or_else(|_| {
-            panic!("unable to create append-only log file '{}'", log.display())
-        });
-        let mut idx = BinFile::open_rw(&idx).unwrap_or_else(|_| {
-            panic!("unable to create random-access index file '{}'", idx.display())
-        });
+        let mut log = BinFile::open_rw(&log)?;
+        let mut idx = BinFile::open_rw(&idx)?;
 
         let mut index = HashMap::new();
         loop {
@@ -85,12 +77,12 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         idx.seek(SeekFrom::End(0))
             .expect("unable to seek to the end of the index");
 
-        Self {
+        Ok(Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
             index: RefCell::new(index),
             _phantom: PhantomData,
-        }
+        })
     }
 }
 

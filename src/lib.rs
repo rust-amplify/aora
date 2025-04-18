@@ -10,7 +10,7 @@ pub use providers::*;
 pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
 where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
-    /// Checks whether given value is present in the log.
+    /// Checks whether a given value is present in the log.
     fn contains_key(&self, key: K) -> bool;
 
     /// Retrieves value from the log.
@@ -63,7 +63,7 @@ where
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
-    /// Checks whether given value is present in the log.
+    /// Checks whether a given value is present in the log.
     fn contains_key(&self, key: K) -> bool { self.value_len(key) > 0 }
 
     /// Measures length of the value vector for the given key.
@@ -87,7 +87,7 @@ where
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
-    /// Checks whether given value is present in the log.
+    /// Checks whether a given value is present in the log.
     fn contains_key(&self, key: K) -> bool;
 
     /// Retrieves value from the log.
