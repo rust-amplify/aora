@@ -5,17 +5,42 @@ on:
     branches:
       - master
     tags:
-      - 'v[0-9]+\.*'
+      - 'v[0-9]+.*'
   pull_request:
     branches:
       - master
       - develop
-      - 'v[0-9]+.[0-9]+'
+      - 'v[0-9]+.?*'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  default:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace
+  no-default:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --no-default-features
+  features:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [ std, file-strict ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Feature ${{matrix.feature}}
+        run: cargo check --workspace --no-default-features --features=${{matrix.feature}}
+      - name: Feature ${{matrix.feature}}
+        run: cargo check --workspace --features=${{matrix.feature}}
   platforms:
     runs-on: ${{ matrix.os }}
     strategy:
