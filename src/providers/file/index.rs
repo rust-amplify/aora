@@ -40,7 +40,7 @@ where
         path.join(name).with_extension("dat")
     }
 
-    pub fn create(path: PathBuf, name: &str) -> io::Result<Self> {
+    pub fn create_new(path: PathBuf, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
         if fs::exists(&path)? {
             return Err(io::Error::new(
@@ -54,7 +54,7 @@ where
 
     pub fn open_or_create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
-        if !fs::exists(&path)? { Self::create(path, name) } else { Self::open(path, name) }
+        if !fs::exists(&path)? { Self::create_new(path, name) } else { Self::open(path, name) }
     }
 
     pub fn open(path: PathBuf, name: &str) -> io::Result<Self> {

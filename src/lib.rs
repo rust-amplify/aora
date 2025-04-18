@@ -41,8 +41,8 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
     ///
     /// # Panic
     ///
-    /// Panics if item under the given id is different from another item under the same id already
-    /// present in the log.
+    /// Panics if the item under the given id is different from another item under the same id
+    /// already present in the log.
     fn insert(&mut self, key: K, item: &V);
 
     /// Inserts (appends) all items from an iterator to the append-only log.
@@ -63,7 +63,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 }
 
 /// Append-only log mapping keys to value sets, which is useful for building one-to-many key
-/// indexes. The values in the index are kept in the order they were added.
+/// indexes. The values in the index are not necessarily kept in the order they were added.
 pub trait AoraIndex<K, V, const KEY_LEN: usize = 32, const VAL_LEN: usize = 32>
 where
     K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,

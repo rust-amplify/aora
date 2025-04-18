@@ -41,7 +41,7 @@ where
         path.join(name).with_extension("log")
     }
 
-    pub fn create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+    pub fn create_new(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
         if fs::exists(&path)? {
             return Err(io::Error::new(
@@ -63,7 +63,7 @@ where
 
     pub fn open_or_create(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
-        if !fs::exists(&path)? { Self::create(path, name) } else { Self::open(path, name) }
+        if !fs::exists(&path)? { Self::create_new(path, name) } else { Self::open(path, name) }
     }
 
     pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn abort() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create(dir.path(), "happy_path").unwrap();
+        let mut db = Db::create_new(dir.path(), "happy_path").unwrap();
 
         normal_ops(&mut db);
         db.abort_transaction();
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn commit() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create(dir.path(), "happy_transactions").unwrap();
+        let mut db = Db::create_new(dir.path(), "happy_transactions").unwrap();
 
         normal_ops(&mut db);
         assert_eq!(db.commit_transaction(), 0);
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn insert_same() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create(dir.path(), "insert_same").unwrap();
+        let mut db = Db::create_new(dir.path(), "insert_same").unwrap();
 
         db.insert_only(0.into(), 1.into());
         db.insert_only(0.into(), 1.into());
@@ -352,7 +352,7 @@ mod tests {
     #[should_panic(expected = "key is already inserted")]
     fn unique_keys() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create(dir.path(), "unique_keys").unwrap();
+        let mut db = Db::create_new(dir.path(), "unique_keys").unwrap();
 
         db.insert_only(0.into(), 1.into());
         assert_eq!(db.commit_transaction(), 0);
@@ -366,7 +366,7 @@ mod tests {
     fn drop_uncommitted() {
         let dir = tempfile::tempdir().unwrap();
         {
-            let mut db = Db::create(dir.path(), "drop_uncommitted").unwrap();
+            let mut db = Db::create_new(dir.path(), "drop_uncommitted").unwrap();
             normal_ops(&mut db);
             drop(db);
         }
