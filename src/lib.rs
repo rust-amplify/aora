@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! AORA: Append-only random-accessed data persistence, made in `BTreeMap`-like fashion.
 
 #[macro_use]
@@ -8,6 +11,7 @@ extern crate amplify;
 mod providers;
 mod types;
 
+#[allow(unused_imports)]
 pub use providers::*;
 pub use types::*;
 
