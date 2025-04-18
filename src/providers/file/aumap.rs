@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::{fs, mem};
@@ -24,7 +24,8 @@ pub struct FileAuraMap<
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     path: PathBuf,
-    cache: Vec<HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    on_disk: Vec<HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    dirty: Vec<HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
     pending: HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
     _phantom: PhantomData<(K, V)>,
 }
@@ -52,7 +53,8 @@ where
             .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", path.display())))?;
         file.write_all(&[0u8; 8])?;
         Ok(Self {
-            cache: Vec::new(),
+            on_disk: Vec::new(),
+            dirty: Vec::new(),
             pending: HashMap::new(),
             path,
             _phantom: PhantomData,
@@ -78,17 +80,19 @@ where
         let mut buf = [0u8; 8];
         file.read_exact(&mut buf)?;
         let num_pages = u64::from_le_bytes(buf);
+        eprintln!("totlal {num_pages} pages in {path:?}");
 
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];
         let mut cache = Vec::with_capacity(num_pages as usize);
         for _ in 0..num_pages {
-            file.read_exact(&mut buf)?;
+            file.read_exact(&mut buf).unwrap();
             let num_keys = u64::from_le_bytes(buf);
             let mut page = HashMap::with_capacity(num_keys as usize);
+            eprintln!("page {} has {} keys", cache.len(), num_keys);
             for _ in 0..num_keys {
-                file.read_exact(&mut key_buf)?;
-                file.read_exact(&mut val_buf)?;
+                file.read_exact(&mut key_buf).unwrap();
+                file.read_exact(&mut val_buf).unwrap();
                 page.insert(key_buf, val_buf);
             }
             cache.push(page);
@@ -101,30 +105,55 @@ where
             ));
         }
 
-        Ok(Self { path, cache, pending: HashMap::new(), _phantom: PhantomData })
+        Ok(Self {
+            path,
+            on_disk: cache,
+            dirty: Vec::new(),
+            pending: HashMap::new(),
+            _phantom: PhantomData,
+        })
     }
 
-    pub fn save(&self) -> io::Result<()> {
-        let mut index_file = BinFile::<MAGIC, VER>::create(&self.path)
+    pub fn save(&mut self) -> io::Result<()> {
+        let mut index_file = BinFile::<MAGIC, VER>::open_rw(&self.path)
             .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", self.path.display())))?;
 
-        let num_pages = self.cache.len() as u64;
-        index_file.write_all(&num_pages.to_le_bytes())?;
+        let offset = index_file.stream_position()?;
+        debug_assert_eq!(offset, 10);
 
-        for page in &self.cache {
+        let mut num_pages = self.on_disk.len() as u64;
+        #[cfg(debug_assertions)]
+        {
+            let mut buf = [0u8; 8];
+            index_file.read_exact(&mut buf)?;
+            index_file.seek(SeekFrom::Current(-8))?;
+            let prev_num_pages = u64::from_le_bytes(buf);
+            debug_assert_eq!(prev_num_pages, num_pages);
+        }
+
+        for page in &self.dirty {
+            index_file.seek(SeekFrom::End(0))?;
+
             let num_keys = page.len() as u64;
             index_file.write_all(&num_keys.to_le_bytes())?;
             for (key, value) in page {
                 index_file.write_all(key)?;
                 index_file.write_all(value)?;
             }
+
+            num_pages += 1;
+            index_file.seek(SeekFrom::Start(offset))?;
+            index_file.write_all(&num_pages.to_le_bytes())?;
         }
+        debug_assert_eq!(num_pages as usize, self.on_disk.len() + self.dirty.len());
+
+        self.on_disk.append(&mut self.dirty);
 
         Ok(())
     }
 
     fn keys_internal(&self) -> impl Iterator<Item = &[u8; KEY_LEN]> {
-        self.cache
+        self.on_disk
             .iter()
             .flat_map(|page| page.keys())
             .chain(self.pending.keys())
@@ -148,7 +177,7 @@ where
 
     fn get(&self, key: K) -> Option<V> {
         let key = key.into();
-        self.cache
+        self.on_disk
             .iter()
             .find_map(|page| page.get(&key))
             .or_else(|| self.pending.get(&key))
@@ -170,19 +199,19 @@ where
 {
     fn commit_transaction(&mut self) -> u64 {
         if !self.pending.is_empty() {
-            self.cache.push(mem::take(&mut self.pending));
+            self.dirty.push(mem::take(&mut self.pending));
             self.save().expect("Cannot save log file");
         }
-        self.cache.len() as u64 - 1
+        self.transaction_count() - 1
     }
 
     fn abort_transaction(&mut self) { self.pending.clear(); }
 
     fn transaction_keys(&self, txno: u64) -> impl ExactSizeIterator<Item = K> {
-        self.cache[txno as usize].keys().copied().map(K::from)
+        self.on_disk[txno as usize].keys().copied().map(K::from)
     }
 
-    fn transaction_count(&self) -> u64 { self.cache.len() as u64 }
+    fn transaction_count(&self) -> u64 { (self.on_disk.len() + self.pending.len()) as u64 }
 }
 
 impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize> Drop

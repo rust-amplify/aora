@@ -55,6 +55,7 @@ dependencies = [
  "binfile",
  "getrandom 0.2.15",
  "indexmap",
+ "log",
  "rand",
  "strict_encoding",
  "tempfile",
