@@ -48,8 +48,9 @@ where
                 format!("append-update log file '{}' already exists", path.display()),
             ));
         }
-        BinFile::<MAGIC, VER>::create_new(&path)
+        let mut file = BinFile::<MAGIC, VER>::create_new(&path)
             .map_err(|e| io::Error::new(e.kind(), format!("at path '{}'", path.display())))?;
+        file.write_all(&[0u8; 8])?;
         Ok(Self {
             cache: Vec::new(),
             pending: HashMap::new(),
@@ -66,9 +67,9 @@ where
     pub fn open(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
         let path = Self::prepare(path, name);
 
-        if fs::exists(&path)? {
+        if !fs::exists(&path)? {
             return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
+                io::ErrorKind::NotFound,
                 format!("append-update log file '{}' does not exist", path.display()),
             ));
         }
@@ -111,7 +112,10 @@ where
     }
 
     fn keys_internal(&self) -> impl Iterator<Item = &[u8; KEY_LEN]> {
-        self.cache.iter().flat_map(|page| page.keys())
+        self.cache
+            .iter()
+            .flat_map(|page| page.keys())
+            .chain(self.pending.keys())
     }
 }
 
@@ -133,6 +137,7 @@ where
         self.cache
             .iter()
             .find_map(|page| page.get(&key))
+            .or_else(|| self.pending.get(&key))
             .copied()
             .map(V::from)
     }
@@ -174,8 +179,106 @@ where
 {
     fn drop(&mut self) {
         assert!(
-            !self.pending.is_empty(),
+            self.pending.is_empty(),
             "the latest transaction must be committed before dropping"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+    use crate::U64Le;
+
+    type Db = FileAuraMap<U64Le, U64Le, { u64::from_be_bytes(*b"DUMBTEST") }, 1, 8, 8>;
+
+    fn normal_ops(db: &mut Db) {
+        // Newly created db is empty
+        assert_eq!(db.keys().count(), 0);
+
+        // No unknown keys
+        assert_eq!(db.get(1.into()), None);
+
+        // Insert op
+        db.insert_only(0.into(), 1.into());
+        // It got there
+        assert_eq!(db.get_expect(0.into()).0, 1);
+        // Idempotence
+        assert_eq!(db.get_expect(0.into()).0, 1);
+
+        // Still no unknown keys
+        assert_eq!(db.get(1.into()), None);
+
+        // Update op
+        db.update_only(0.into(), 2.into());
+        // It got updated
+        assert_eq!(db.get_expect(0.into()).0, 2);
+
+        // Update or insert op
+        db.insert_or_update(0.into(), 3.into());
+        // It got updated
+        assert_eq!(db.get_expect(0.into()).0, 3);
+
+        // Still no unknown keys
+        assert_eq!(db.get(1.into()), None);
+
+        // Update or insert op with a new key
+        db.insert_or_update(1.into(), 4.into());
+        // It got there
+        assert_eq!(db.get_expect(1.into()).0, 4);
+        // The previous key hasn't gone
+        assert_eq!(db.get_expect(0.into()).0, 3);
+
+        // We have two keys at the end
+        assert_eq!(db.keys().count(), 2);
+    }
+
+    #[test]
+    fn abort() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::create(dir.path(), "happy_path").unwrap();
+
+        normal_ops(&mut db);
+        db.abort_transaction();
+
+        // Check that now we are empty
+        assert_eq!(db.get(1.into()), None);
+        assert_eq!(db.get(0.into()), None);
+        assert_eq!(db.keys().count(), 0);
+        assert_eq!(db.transaction_count(), 0);
+
+        let data = fs::read(dir.path().join("happy_path.log")).unwrap();
+        assert_eq!(data, b"DUMBTEST\0\x01\0\0\0\0\0\0\0\0");
+    }
+
+    #[test]
+    fn commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::create(dir.path(), "happy_transactions").unwrap();
+
+        normal_ops(&mut db);
+        assert_eq!(db.commit_transaction(), 0);
+
+        // Check that commitment hasn't changed anything
+        assert_eq!(db.get_expect(1.into()).0, 4);
+        assert_eq!(db.get_expect(0.into()).0, 3);
+        assert_eq!(db.keys().collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+
+        // Check that transaction information is value
+        assert_eq!(db.transaction_count(), 1);
+        assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+
+        let mut db = Db::open(dir.path(), "happy_transactions").unwrap();
+
+        // Check that commitment hasn't changed anything
+        assert_eq!(db.get_expect(1.into()).0, 4);
+        assert_eq!(db.get_expect(0.into()).0, 3);
+        assert_eq!(db.keys().collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+
+        // Check that transaction information is value
+        assert_eq!(db.transaction_count(), 1);
+        assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
     }
 }

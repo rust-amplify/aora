@@ -6,8 +6,10 @@
 extern crate amplify;
 
 mod providers;
+mod types;
 
 pub use providers::*;
+pub use types::*;
 
 /// Trait for providers of append-only key-value maps.
 pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
