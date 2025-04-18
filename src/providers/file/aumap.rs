@@ -117,6 +117,8 @@ where
             .flat_map(|page| page.keys())
             .chain(self.pending.keys())
     }
+
+    pub fn path(&self) -> &Path { &self.path }
 }
 
 impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
