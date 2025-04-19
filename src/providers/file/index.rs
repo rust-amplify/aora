@@ -73,11 +73,10 @@ where
         while file.read_exact(&mut key_buf).is_ok() {
             let mut values = IndexSet::new();
             let mut len = [0u8; 4];
-            file.read_exact(&mut len).expect("cannot read index file");
+            file.read_exact(&mut len)?;
             let mut len = u32::from_le_bytes(len);
             while len > 0 {
-                file.read_exact(&mut val_buf)
-                    .expect("cannot read index file");
+                file.read_exact(&mut val_buf)?;
                 let res = values.insert(val_buf);
                 debug_assert!(res, "duplicate id in index file");
                 len -= 1;
