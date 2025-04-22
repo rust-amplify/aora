@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::{RefCell, RefMut};
-use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use binfile::BinFile;
+use indexmap::IndexMap;
 use strict_encoding::{
     StreamReader, StreamWriter, StrictDecode, StrictEncode, StrictReader, StrictWriter,
 };
@@ -38,7 +38,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
     log: RefCell<BinFile<MAGIC, VER>>,
     idx: RefCell<BinFile<MAGIC, VER>>,
-    index: RefCell<HashMap<[u8; KEY_LEN], u64>>,
+    index: RefCell<IndexMap<[u8; KEY_LEN], u64>>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -77,7 +77,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         Ok(Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
-            index: RefCell::new(HashMap::new()),
+            index: RefCell::new(IndexMap::new()),
             _phantom: PhantomData,
         })
     }
@@ -119,7 +119,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         Ok(Self {
             log: RefCell::new(log),
             idx: RefCell::new(idx),
-            index: RefCell::new(HashMap::new()),
+            index: RefCell::new(IndexMap::new()),
             _phantom: PhantomData,
         })
     }
@@ -147,7 +147,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         let mut idx = BinFile::open_rw(&idx)
             .map_err(|err| io::Error::new(err.kind(), format!("index file '{}'", idx.display())))?;
 
-        let mut index = HashMap::new();
+        let mut index = IndexMap::new();
         loop {
             let mut key_buf = [0u8; KEY_LEN];
             let res = idx.read_exact(&mut key_buf);
@@ -226,20 +226,14 @@ where
         idx.write_all(&pos.to_le_bytes())
             .expect("unable to write to index");
 
-        self.index.get_mut().insert(key, pos);
+        self.index.borrow_mut().insert(key, pos);
     }
 
     fn iter(&self) -> impl Iterator<Item = (K, V)> {
-        let mut log = self.log.borrow_mut();
-        log.seek(SeekFrom::Start(0))
-            .expect("unable to seek to the start of the log file");
-        log.seek(SeekFrom::Start(0))
-            .expect("unable to seek to the start of the index file");
-
+        let index = self.index.borrow().clone();
         Iter {
-            log,
-            idx: self.idx.borrow_mut(),
-            pos: 0,
+            log: self.log.borrow_mut(),
+            index: index.into_iter(),
             _phantom: PhantomData,
         }
     }
@@ -254,8 +248,7 @@ pub struct Iter<
     const KEY_LEN: usize,
 > {
     log: RefMut<'file, BinFile<MAGIC, VER>>,
-    idx: RefMut<'file, BinFile<MAGIC, VER>>,
-    pos: u64,
+    index: indexmap::map::IntoIter<[u8; KEY_LEN], u64>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -270,23 +263,13 @@ impl<
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut id = [0u8; KEY_LEN];
-        self.idx.read_exact(&mut id).ok()?;
-        self.idx
-            .seek(SeekFrom::Current(8))
-            .expect("broken index file");
-
+        let (id, pos) = self.index.next()?;
         self.log
-            .seek(SeekFrom::Start(self.pos))
+            .seek(SeekFrom::Start(pos))
             .expect("unable to seek to the iterator position");
 
         let mut reader = StrictReader::with(StreamReader::new::<{ usize::MAX }>(&mut *self.log));
         let item = V::strict_decode(&mut reader).ok()?;
-
-        self.pos = self
-            .log
-            .stream_position()
-            .expect("unable to retrieve log position");
 
         Some((id.into(), item))
     }
