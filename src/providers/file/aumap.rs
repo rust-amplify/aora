@@ -197,12 +197,13 @@ where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
-    fn commit_transaction(&mut self) -> u64 {
-        if !self.pending.is_empty() {
-            self.dirty.push(mem::take(&mut self.pending));
-            self.save().expect("Cannot save log file");
+    fn commit_transaction(&mut self) -> Option<u64> {
+        if self.pending.is_empty() {
+            return None;
         }
-        self.transaction_count() - 1
+        self.dirty.push(mem::take(&mut self.pending));
+        self.save().expect("Cannot save the log file");
+        Some(self.transaction_count() - 1)
     }
 
     fn abort_transaction(&mut self) { self.pending.clear(); }
@@ -281,7 +282,7 @@ mod tests {
     #[test]
     fn abort() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create_new(dir.path(), "happy_path").unwrap();
+        let mut db = Db::create_new(dir.path(), "abort").unwrap();
 
         normal_ops(&mut db);
         db.abort_transaction();
@@ -292,17 +293,26 @@ mod tests {
         assert_eq!(db.keys().count(), 0);
         assert_eq!(db.transaction_count(), 0);
 
-        let data = fs::read(dir.path().join("happy_path.log")).unwrap();
+        let data = fs::read(dir.path().join("abort.log")).unwrap();
         assert_eq!(data, b"DUMBTEST\0\x01\0\0\0\0\0\0\0\0");
+    }
+
+    #[test]
+    fn empty_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::create_new(dir.path(), "dir").unwrap();
+
+        // No pending transaction
+        assert_eq!(db.commit_transaction(), None);
     }
 
     #[test]
     fn commit() {
         let dir = tempfile::tempdir().unwrap();
-        let mut db = Db::create_new(dir.path(), "happy_transactions").unwrap();
+        let mut db = Db::create_new(dir.path(), "commit").unwrap();
 
         normal_ops(&mut db);
-        assert_eq!(db.commit_transaction(), 0);
+        assert_eq!(db.commit_transaction(), Some(0));
 
         // Check that commitment hasn't changed anything
         assert_eq!(db.get_expect(1.into()).0, 4);
@@ -315,12 +325,12 @@ mod tests {
 
         // Insert another item
         db.insert_only(3.into(), 5.into());
-        assert_eq!(db.commit_transaction(), 1);
+        assert_eq!(db.commit_transaction(), Some(1));
         assert_eq!(db.transaction_count(), 2);
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
         assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
 
-        let db = Db::open(dir.path(), "happy_transactions").unwrap();
+        let db = Db::open(dir.path(), "commit").unwrap();
 
         // Check that commitment hasn't changed anything
         assert_eq!(db.get_expect(1.into()).0, 4);
@@ -340,10 +350,10 @@ mod tests {
 
         db.insert_only(0.into(), 1.into());
         db.insert_only(0.into(), 1.into());
-        assert_eq!(db.commit_transaction(), 0);
+        assert_eq!(db.commit_transaction(), Some(0));
 
         db.insert_only(0.into(), 1.into());
-        assert_eq!(db.commit_transaction(), 0);
+        assert_eq!(db.commit_transaction(), None);
 
         assert_eq!(db.transaction_count(), 1);
     }
@@ -355,10 +365,10 @@ mod tests {
         let mut db = Db::create_new(dir.path(), "unique_keys").unwrap();
 
         db.insert_only(0.into(), 1.into());
-        assert_eq!(db.commit_transaction(), 0);
+        assert_eq!(db.commit_transaction(), Some(0));
 
         db.insert_only(0.into(), 2.into());
-        assert_eq!(db.commit_transaction(), 1);
+        assert_eq!(db.commit_transaction(), Some(1));
     }
 
     #[test]

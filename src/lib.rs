@@ -154,12 +154,15 @@ where
 pub trait TransactionalMap<K> {
     /// Commits transaction, returning transaction number.
     ///
+    /// If the pending transaction is empty, a new transaction is not created and `None` is
+    /// returned.
+    ///
     /// Transaction numbers are always sequential.
     ///
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if another transaction is already taking place.
-    fn commit_transaction(&mut self) -> u64;
+    /// May panic due to internal errors.
+    fn commit_transaction(&mut self) -> Option<u64>;
 
     /// Aborts latest transaction.
     fn abort_transaction(&mut self);
