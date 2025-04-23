@@ -87,7 +87,7 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         let (log, idx) = Self::prepare(path, name);
         let log_exists = fs::exists(&log)?;
         let idx_exists = fs::exists(&idx)?;
-        if log_exists || idx_exists {
+        if !log_exists || !idx_exists {
             return Err(io::Error::other(AoraMapError::PartiallyExists {
                 name: name.to_string(),
                 path: path.display().to_string(),
@@ -129,13 +129,13 @@ where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
         let (log, idx) = Self::prepare(path, name);
         let log_exists = fs::exists(&log)?;
         let idx_exists = fs::exists(&idx)?;
-        if log_exists && idx_exists {
+        if !log_exists && !idx_exists {
             return Err(io::Error::other(AoraMapError::NotExists {
                 name: name.to_string(),
                 path: path.display().to_string(),
             }));
         }
-        if log_exists || idx_exists {
+        if !log_exists || !idx_exists {
             return Err(io::Error::other(AoraMapError::PartiallyExists {
                 name: name.to_string(),
                 path: path.display().to_string(),

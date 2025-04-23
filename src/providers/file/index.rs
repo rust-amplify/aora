@@ -61,7 +61,7 @@ where
         let path = Self::prepare(path, name);
         let mut cache = HashMap::new();
 
-        if fs::exists(&path)? {
+        if !fs::exists(&path)? {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 format!("index file '{}' does not exist", path.display()),

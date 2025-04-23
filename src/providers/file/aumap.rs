@@ -80,7 +80,6 @@ where
         let mut buf = [0u8; 8];
         file.read_exact(&mut buf)?;
         let num_pages = u64::from_le_bytes(buf);
-        eprintln!("totlal {num_pages} pages in {path:?}");
 
         let mut key_buf = [0u8; KEY_LEN];
         let mut val_buf = [0u8; VAL_LEN];
@@ -89,7 +88,6 @@ where
             file.read_exact(&mut buf).unwrap();
             let num_keys = u64::from_le_bytes(buf);
             let mut page = HashMap::with_capacity(num_keys as usize);
-            eprintln!("page {} has {} keys", cache.len(), num_keys);
             for _ in 0..num_keys {
                 file.read_exact(&mut key_buf).unwrap();
                 file.read_exact(&mut val_buf).unwrap();
