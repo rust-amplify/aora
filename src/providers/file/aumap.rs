@@ -161,6 +161,14 @@ where
     }
 
     pub fn path(&self) -> &Path { &self.path }
+
+    pub fn to_dump(&self) -> FileAuraMapDump<KEY_LEN, VAL_LEN> {
+        FileAuraMapDump {
+            on_disk: self.on_disk.clone(),
+            dirty: self.dirty.clone(),
+            pending: self.pending.clone(),
+        }
+    }
 }
 
 impl<K, V, const MAGIC: u64, const VER: u16, const KEY_LEN: usize, const VAL_LEN: usize>
@@ -242,6 +250,13 @@ where
                 .join("\n\t")
         );
     }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct FileAuraMapDump<const KEY_LEN: usize, const VAL_LEN: usize> {
+    pub on_disk: Vec<IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    pub dirty: Vec<IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    pub pending: IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
 }
 
 #[cfg(test)]

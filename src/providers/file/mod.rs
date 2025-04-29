@@ -5,5 +5,5 @@ mod aumap;
 mod index;
 
 pub use aomap::FileAoraMap;
-pub use aumap::FileAuraMap;
+pub use aumap::{FileAuraMap, FileAuraMapDump};
 pub use index::FileAoraIndex;
