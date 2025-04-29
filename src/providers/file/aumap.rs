@@ -88,12 +88,12 @@ where
         let mut val_buf = [0u8; VAL_LEN];
         let mut cache = Vec::with_capacity(num_pages as usize);
         for _ in 0..num_pages {
-            file.read_exact(&mut buf).unwrap();
+            file.read_exact(&mut buf)?;
             let num_keys = u64::from_le_bytes(buf);
             let mut page = IndexMap::with_capacity(num_keys as usize);
             for _ in 0..num_keys {
-                file.read_exact(&mut key_buf).unwrap();
-                file.read_exact(&mut val_buf).unwrap();
+                file.read_exact(&mut key_buf)?;
+                file.read_exact(&mut val_buf)?;
                 page.insert(key_buf, val_buf);
             }
             cache.push(page);
