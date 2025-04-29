@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fmt::Display;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::{fs, mem};
 
-use amplify::Bytes;
+use amplify::hex::ToHex;
 use binfile::BinFile;
 use indexmap::IndexMap;
 
@@ -168,6 +169,13 @@ where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
+    fn display(&self) -> impl Display {
+        self.path
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .unwrap_or("<unnamed>")
+    }
+
     fn keys(&self) -> impl Iterator<Item = K> { self.keys_internal().copied().map(K::from) }
 
     fn contains_key(&self, key: K) -> bool {
@@ -224,14 +232,12 @@ where
     fn drop(&mut self) {
         assert!(
             self.pending.is_empty(),
-            "the latest transaction must be committed before dropping\nNon-commited page:\n\t{}",
+            "the latest transaction in the table '{}' must be committed before \
+             dropping\nNon-commited page:\n\t{}",
+            self.display(),
             self.pending
                 .iter()
-                .map(|(k, v)| format!(
-                    "{} => {}",
-                    Bytes::from_byte_array(*k),
-                    Bytes::from_byte_array(*v)
-                ))
+                .map(|(k, v)| format!("{} => {}", k.to_hex(), v.to_hex()))
                 .collect::<Vec<_>>()
                 .join("\n\t")
         );
@@ -368,7 +374,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "key is already inserted")]
+    #[should_panic(expected = "failed to insert-only key 0000000000000000 which is already \
+                               present in the table 'unique_keys' (old value=0100000000000000, \
+                               attempted new value=0200000000000000)")]
     fn unique_keys() {
         let dir = tempfile::tempdir().unwrap();
         let mut db = Db::create_new(dir.path(), "unique_keys").unwrap();
@@ -381,7 +389,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "the latest transaction must be committed before dropping")]
+    #[should_panic(expected = "the latest transaction in the table 'drop_uncommitted' must be \
+                               committed before dropping
+Non-commited page:
+	0000000000000000 => 0300000000000000
+	0100000000000000 => 0400000000000000")]
     fn drop_uncommitted() {
         let dir = tempfile::tempdir().unwrap();
         {

@@ -11,9 +11,12 @@ extern crate amplify;
 mod providers;
 mod types;
 
-#[allow(unused_imports)]
-pub use providers::*;
-pub use types::*;
+use std::fmt::Display;
+
+use amplify::hex::ToHex;
+
+pub use crate::providers::*;
+pub use crate::types::*;
 
 /// Trait for providers of append-only key-value maps.
 pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
@@ -93,6 +96,9 @@ where
     K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
+    /// Returns human-readable table identifier
+    fn display(&self) -> impl Display;
+
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
@@ -100,10 +106,6 @@ where
     fn contains_key(&self, key: K) -> bool;
 
     /// Retrieves value from the log.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the item under the provided key is not present.
     fn get(&self, key: K) -> Option<V>;
 
     /// Retrieves value from the log.
@@ -111,26 +113,41 @@ where
     /// # Panics
     ///
     /// Panics if the item under the provided key is not present.
-    fn get_expect(&self, key: K) -> V { self.get(key).expect("key is absent") }
+    fn get_expect(&self, key: K) -> V {
+        let bytes = key.into();
+        self.get(bytes.into()).unwrap_or_else(|| {
+            panic!("key {} is not found in the table '{}'", bytes.to_hex(), self.display(),)
+        })
+    }
 
     /// Inserts item to the append-only log if the key is not yet present.
     ///
     /// # Panic
     ///
-    /// Panics if item under the given id is different from another item under the same id already
-    /// present in the log.
+    /// Panics if the item under the given id is different from another item under the same id
+    /// already present in the log.
     fn insert_only(&mut self, key: K, val: V)
     where K: Copy {
-        if let Some(v) = self.get(key) {
-            if v.into() != val.into() {
-                panic!("key is already inserted");
+        let bytes = key.into();
+        if let Some(v) = self.get(bytes.into()) {
+            let old = v.into();
+            let new = val.into();
+            if old != new {
+                panic!(
+                    "failed to insert-only key {} which is already present in the table '{}' (old \
+                     value={}, attempted new value={})",
+                    bytes.to_hex(),
+                    self.display(),
+                    old.to_hex(),
+                    new.to_hex()
+                )
             }
             return;
         }
         self.insert_or_update(key, val);
     }
 
-    /// Inserts item to the append-only log or updates its value.
+    /// Inserts an item to the append-only log or updates its value.
     fn insert_or_update(&mut self, key: K, val: V);
 
     /// Updates the value for a given key.
@@ -140,8 +157,13 @@ where
     /// If the key is not present in the log.
     fn update_only(&mut self, key: K, val: V)
     where K: Copy {
-        if !self.contains_key(key) {
-            panic!("the key is not known");
+        let bytes = key.into();
+        if !self.contains_key(bytes.into()) {
+            panic!(
+                "failed to update non-existing key {} in the table '{}'",
+                self.display(),
+                bytes.to_hex()
+            );
         }
         self.insert_or_update(key, val);
     }
