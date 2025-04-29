@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::{fs, mem};
 
+use amplify::Bytes;
 use binfile::BinFile;
 
 use crate::{AuraMap, TransactionalMap};
@@ -222,7 +223,16 @@ where
     fn drop(&mut self) {
         assert!(
             self.pending.is_empty(),
-            "the latest transaction must be committed before dropping"
+            "the latest transaction must be committed before dropping\nNon-commited page:\n\t{}",
+            self.pending
+                .iter()
+                .map(|(k, v)| format!(
+                    "{} => {}",
+                    Bytes::from_byte_array(*k),
+                    Bytes::from_byte_array(*v)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n\t")
         );
     }
 }
