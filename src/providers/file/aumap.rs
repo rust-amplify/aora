@@ -8,6 +8,7 @@ use std::{fs, mem};
 
 use amplify::Bytes;
 use binfile::BinFile;
+use indexmap::IndexMap;
 
 use crate::{AuraMap, TransactionalMap};
 
@@ -25,9 +26,9 @@ pub struct FileAuraMap<
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
     path: PathBuf,
-    on_disk: Vec<HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
-    dirty: Vec<HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
-    pending: HashMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
+    on_disk: Vec<IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    dirty: Vec<IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>>,
+    pending: IndexMap<[u8; KEY_LEN], [u8; VAL_LEN]>,
     _phantom: PhantomData<(K, V)>,
 }
 
@@ -56,7 +57,7 @@ where
         Ok(Self {
             on_disk: Vec::new(),
             dirty: Vec::new(),
-            pending: HashMap::new(),
+            pending: default!(),
             path,
             _phantom: PhantomData,
         })
@@ -88,7 +89,7 @@ where
         for _ in 0..num_pages {
             file.read_exact(&mut buf).unwrap();
             let num_keys = u64::from_le_bytes(buf);
-            let mut page = HashMap::with_capacity(num_keys as usize);
+            let mut page = IndexMap::with_capacity(num_keys as usize);
             for _ in 0..num_keys {
                 file.read_exact(&mut key_buf).unwrap();
                 file.read_exact(&mut val_buf).unwrap();
@@ -108,7 +109,7 @@ where
             path,
             on_disk: cache,
             dirty: Vec::new(),
-            pending: HashMap::new(),
+            pending: default!(),
             _phantom: PhantomData,
         })
     }
