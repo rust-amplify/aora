@@ -193,12 +193,14 @@ where
 
     fn get(&self, key: K) -> Option<V> {
         let key = key.into();
+        if let Some(val) = self.pending.get(&key) {
+            return Some(V::from(*val));
+        }
         self.dirty
             .iter()
-            .chain(&self.on_disk)
             .rev()
+            .chain(self.on_disk.iter().rev())
             .find_map(|page| page.get(&key))
-            .or_else(|| self.pending.get(&key))
             .copied()
             .map(V::from)
     }
