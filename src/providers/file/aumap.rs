@@ -206,8 +206,13 @@ where
     }
 
     fn insert_or_update(&mut self, key: K, val: V) {
+        let key = key.into();
         let val = val.into();
-        *self.pending.entry(key.into()).or_insert(val) = val;
+        // Check if the value already known
+        if self.get(key.into()).map(V::into) == Some(val) {
+            return;
+        }
+        *self.pending.entry(key).or_insert(val) = val;
     }
 }
 
