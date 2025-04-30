@@ -193,8 +193,10 @@ where
 
     fn get(&self, key: K) -> Option<V> {
         let key = key.into();
-        self.on_disk
+        self.dirty
             .iter()
+            .chain(&self.on_disk)
+            .rev()
             .find_map(|page| page.get(&key))
             .or_else(|| self.pending.get(&key))
             .copied()
@@ -356,6 +358,18 @@ mod tests {
         // Insert another item
         db.insert_only(3.into(), 5.into());
         assert_eq!(db.commit_transaction(), Some(1));
+        assert_eq!(db.transaction_count(), 2);
+        assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
+        assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
+
+        db.save().unwrap();
+
+        // Check that commitment hasn't changed anything
+        assert_eq!(db.get_expect(1.into()).0, 4);
+        assert_eq!(db.get_expect(0.into()).0, 3);
+        assert_eq!(db.keys().collect::<HashSet<_>>(), set![0.into(), 1.into(), 3.into()]);
+
+        // Check that transaction information is value
         assert_eq!(db.transaction_count(), 2);
         assert_eq!(db.transaction_keys(0).collect::<HashSet<_>>(), set![0.into(), 1.into()]);
         assert_eq!(db.transaction_keys(1).collect::<HashSet<_>>(), set![3.into()]);
