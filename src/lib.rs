@@ -11,10 +11,11 @@ extern crate amplify;
 mod providers;
 mod types;
 
-use std::fmt::Display;
+use core::fmt::Display;
 
 use amplify::hex::ToHex;
 
+#[allow(unused_imports)]
 pub use crate::providers::*;
 pub use crate::types::*;
 
