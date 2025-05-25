@@ -185,6 +185,8 @@ where
     K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Eq + StrictEncode + StrictDecode,
 {
+    fn len(&self) -> usize { self.index.borrow().len() }
+
     fn contains_key(&self, key: K) -> bool { self.index.borrow().contains_key(&key.into()) }
 
     fn get(&self, key: K) -> Option<V> {

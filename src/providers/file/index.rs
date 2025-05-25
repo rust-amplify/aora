@@ -108,6 +108,8 @@ where
     K: From<[u8; KEY_LEN]> + Into<[u8; KEY_LEN]>,
     V: From<[u8; VAL_LEN]> + Into<[u8; VAL_LEN]>,
 {
+    fn len(&self) -> usize { self.cache.len() }
+
     fn keys(&self) -> impl Iterator<Item = K> { self.cache.keys().copied().map(K::from) }
 
     fn contains_key(&self, key: K) -> bool { self.cache.contains_key(&key.into()) }

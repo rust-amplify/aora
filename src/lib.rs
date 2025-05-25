@@ -23,6 +23,12 @@ pub use crate::types::*;
 pub trait AoraMap<K, V, const KEY_LEN: usize = 32>
 where K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>
 {
+    /// Returns a number of the items in the log.
+    fn len(&self) -> usize;
+
+    /// Checks whether the log is empty.
+    fn is_empty(&self) -> bool { self.len() == 0 }
+
     /// Checks whether a given value is present in the log.
     fn contains_key(&self, key: K) -> bool;
 
@@ -73,6 +79,12 @@ where
     K: Into<[u8; KEY_LEN]> + From<[u8; KEY_LEN]>,
     V: Into<[u8; VAL_LEN]> + From<[u8; VAL_LEN]>,
 {
+    /// Returns a number of the items in the log.
+    fn len(&self) -> usize;
+
+    /// Checks whether the log is empty.
+    fn is_empty(&self) -> bool { self.len() == 0 }
+
     /// Returns iterator over all known keys.
     fn keys(&self) -> impl Iterator<Item = K>;
 
