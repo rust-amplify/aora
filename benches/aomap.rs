@@ -16,7 +16,7 @@ fn get(bench: &mut Bencher) {
     let dir = tempfile::tempdir().unwrap();
     let mut db = Db::create_new(dir.path(), NAME).unwrap();
 
-    let key = [0xFd; 32];
+    let key = [0xFD; 32];
     let val = SmallVec::from_checked(vec![0xA8; 1024]);
     db.insert(key, &val);
 
